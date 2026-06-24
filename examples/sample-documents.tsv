@@ -1,0 +1,11 @@
+name	filename	url	notes
+huck_finn_difficult	c02-22.pdf	https://raw.githubusercontent.com/ocrmypdf/OCRmyPDF/main/tests/resources/c02-22.pdf	Difficult public-domain page from Project Gutenberg with unusual fonts and illustration.
+two_column_linn	linn.pdf	https://raw.githubusercontent.com/ocrmypdf/OCRmyPDF/main/tests/resources/linn.pdf	Two-column page image derived from a Wikimedia source.
+rotated_skew	rotated_skew.pdf	https://raw.githubusercontent.com/ocrmypdf/OCRmyPDF/main/tests/resources/rotated_skew.pdf	Rotated and skewed derivative useful for orientation and deskew tests.
+skew	skew.pdf	https://raw.githubusercontent.com/ocrmypdf/OCRmyPDF/main/tests/resources/skew.pdf	Skewed derivative useful for deskew tests.
+cardinal	cardinal.pdf	https://raw.githubusercontent.com/ocrmypdf/OCRmyPDF/main/tests/resources/cardinal.pdf	Rotated copies in four directions, useful for orientation tests.
+graph_slanted_text	graph.pdf	https://raw.githubusercontent.com/ocrmypdf/OCRmyPDF/main/tests/resources/graph.pdf	Graph image with slanted text.
+french_diacritics	francais.pdf	https://raw.githubusercontent.com/ocrmypdf/OCRmyPDF/main/tests/resources/francais.pdf	French text with diacritics.
+multipage	multipage.pdf	https://raw.githubusercontent.com/ocrmypdf/OCRmyPDF/main/tests/resources/multipage.pdf	Small multipage PDF assembled from other test resources.
+epson_scanner	epson.pdf	https://raw.githubusercontent.com/ocrmypdf/OCRmyPDF/main/tests/resources/epson.pdf	Linearized PDF from an Epson scanner containing a CC-BY-SA Wikipedia article printout.
+typewriter_high_dpi	2400dpi.pdf	https://raw.githubusercontent.com/ocrmypdf/OCRmyPDF/main/tests/resources/2400dpi.pdf	Simple typewriter text at high resolution.

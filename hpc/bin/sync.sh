@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# Sync this repo from trusted-local-client to the cluster's project dir.
+#
+# One-way: trusted-local-client is source of truth. Run this after editing any HPC code.
+#
+# Usage:
+#   bin/sync.sh
+#   bin/sync.sh --dry-run
+#   bin/sync.sh --delete   # also remove cluster-side files that no longer exist locally
+set -euo pipefail
+
+# Defaults (override via env if you want)
+: "${HPC_HOST:=hpc}"
+: "${HPC_USER:=${USER:-}}"
+: "${HPC_KEY:=}"
+: "${HPC_REMOTE_DIR:=ocr-examples}"  # relative to $HOME on cluster
+
+dry=""
+delete=""
+for arg in "$@"; do
+    case "$arg" in
+        --dry-run) dry="--dry-run" ;;
+        --delete)  delete="--delete" ;;
+        *) echo "unknown arg: $arg"; exit 2 ;;
+    esac
+done
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SOURCE_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+# Quote / trailing-slash semantics: trailing / on source means "contents of",
+# without means "the dir itself". We want the repo contents to land in
+# $HPC_REMOTE_DIR/ on the cluster.
+echo "syncing $SOURCE_DIR/  →  $HPC_USER@$HPC_HOST:$HPC_REMOTE_DIR/"
+if [[ -n "$HPC_KEY" ]]; then
+    echo "  (using key: $HPC_KEY)"
+else
+    echo "  (using default ssh config/agent)"
+fi
+echo ""
+
+RSYNC_SSH=(ssh)
+if [[ -n "$HPC_KEY" ]]; then
+    RSYNC_SSH+=(-i "$HPC_KEY" -o IdentitiesOnly=yes)
+fi
+
+rsync \
+    -av \
+    --human-readable \
+    --partial \
+    --exclude '.venv/' \
+    --exclude '.uv-cache/' \
+    --exclude 'results/' \
+    --exclude '__pycache__/' \
+    --exclude '*.pyc' \
+    --exclude '.cache/' \
+    $dry $delete \
+    -e "${RSYNC_SSH[*]}" \
+    "$SOURCE_DIR/" \
+    "$HPC_USER@$HPC_HOST:$HPC_REMOTE_DIR/"
+
+echo ""
+echo "sync complete."
+echo "cluster-side path: ~/$HPC_REMOTE_DIR/"

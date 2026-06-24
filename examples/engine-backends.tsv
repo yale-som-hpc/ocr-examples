@@ -1,0 +1,7 @@
+engine_slug	label	disk_backend	no_hpc_disk_backend	notes
+pypdf	pypdf	local PDF text extraction	none needed; PDF text extraction runs where the trusted PDF already lives	No OCR model. Use only for born-digital PDFs with embedded text.
+docling	docling	local/HPC docling CLI on disk	docling-serve over SSH tunnel	Fallback OCR engine. The tunnel path POSTs PDFs to docling-serve and receives Markdown; no PDF/output bytes persist on HPC disk.
+olmocr2	olmOCR-2	local MLX via mlx-vlm	HPC vLLM over SSH tunnel	VLM OCR engine. Local model: mlx-community/olmOCR-2-7B-1025-4bit. HPC model: allenai/olmOCR-2-7B-1025.
+deepseek_ocr	DeepSeek-OCR-2	local MLX via mlx-vlm	HPC vLLM over SSH tunnel	VLM OCR engine. Local model default: mlx-community/DeepSeek-OCR-2-bf16. HPC model: deepseek-ai/DeepSeek-OCR-2.
+glm_ocr	GLM-OCR	local MLX via mlx-vlm	HPC vLLM over SSH tunnel	VLM OCR engine. Local model: mlx-community/GLM-OCR-8bit. HPC model: zai-org/GLM-OCR.
+unlimited_ocr	Baidu Unlimited-OCR	no local disk backend	HPC SGLang over SSH tunnel	SGLang-only OCR engine. HPC model: baidu/Unlimited-OCR.

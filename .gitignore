@@ -1,0 +1,17 @@
+.env
+.venv/
+.uv-cache/
+__pycache__/
+*.pyc
+
+# Inputs and outputs often contain sensitive documents.
+data/
+inputs/
+results/
+tmp/
+scratch/
+logs/
+
+# Slurm output can contain paths or OCR text if commands are changed.
+slurm-*.out
+*.log

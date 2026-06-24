@@ -1,0 +1,4 @@
+# One input document per line. Blank lines and comments are ignored.
+/path/to/documents/sample_001.pdf
+/path/to/documents/sample_002.pdf
+/path/to/documents/page_001.png
