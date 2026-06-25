@@ -1,11 +1,7 @@
 # OCR examples for Yale SOM HPC
 
 Small examples for running OCR on the HPC in ways that are effective, polite to
-other users, and usable for both ordinary batch jobs and sensitive data workflows.
-
-The examples do not include any real private documents. Bring your own PDFs or
-page images, or use the public samples below. The OCR engine examples are
-genericized for public sample PDFs and HPC smoke tests.
+other users, and usable for both ordinary batch jobs and sensitive data workflows. We highly recommend your AI agent load the [HPC-related skills](https://github.com/yale-som-hpc/claude-code-marketplace) before launching jobs on the SOM HPC.
 
 ## What is here
 
