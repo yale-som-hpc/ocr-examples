@@ -1,7 +1,11 @@
 # OCR examples for Yale SOM HPC
 
 Small examples for running OCR on the HPC in ways that are effective, polite to
-other users, and usable for both ordinary batch jobs and sensitive data workflows. We highly recommend your AI agent load the [HPC-related skills](https://github.com/yale-som-hpc/claude-code-marketplace) before launching jobs on the SOM HPC. We don't expect you to use these scripts directly, but rather to customize them for your use case. 
+other users, and usable for both ordinary batch jobs and sensitive data
+workflows. We highly recommend your AI agent load the
+[HPC-related skills](https://github.com/yale-som-hpc/claude-code-marketplace)
+before launching jobs on the SOM HPC. We expect most users to customize these
+scripts for their own document layout and output paths.
 
 ## What is here
 
@@ -90,7 +94,9 @@ just prepare-documents
 ```
 
 Run disk-backed examples for files that are approved for the current storage
-location:
+location. The `olmocr2`, `deepseek_ocr`, and `glm_ocr` local commands use
+MLX and require Apple Silicon; use their `--use-hpc` tunnel mode from Linux
+or other non-MLX machines.
 
 ```sh
 just engine-extract pypdf,docling --force
@@ -106,20 +112,31 @@ interrupted.
 
 ## Polite HPC batch OCR
 
-Create a manifest with one input path per line:
+The higher-level engine wrappers use a deterministic document layout:
 
-```sh
-find /path/to/pdfs -type f \( -iname '*.pdf' -o -iname '*.png' -o -iname '*.jpg' -o -iname '*.tif' \) \
-  | sort > manifest.txt
+```text
+<documents-root>/<document-id>/document.pdf
 ```
 
-For PDFs that are approved to reside on the storage where the script runs, pass
-that manifest with `--from-file` and set an output path appropriate for the
-project:
+Their `--from-file` option expects one `document-id` per line, not arbitrary
+PDF paths. The public sample setup creates that layout and writes
+`data/samples/documents.txt` for you. For your own approved-on-disk PDFs,
+create the same layout under a project-controlled `--documents-root`, then
+write a document-id list:
+
+```sh
+# Example document-id list for an existing document layout.
+find /path/to/document-layout -mindepth 2 -maxdepth 2 -name document.pdf \
+  | sed 's#/document.pdf$##' \
+  | xargs -n1 basename \
+  | sort > document-ids.txt
+```
+
+Then pass that list with `--from-file` and set `--documents-root` to the layout:
 
 ```sh
 uv run --script scripts/documents_process.py \
-  --from-file manifest.txt \
+  --from-file document-ids.txt \
   --documents-root /path/to/document-layout \
   --stages ocr \
   --engines pypdf,docling
@@ -129,7 +146,8 @@ For GPU engines, keep concurrency explicit:
 
 ```sh
 uv run --script scripts/olmocr2_extract.py \
-  --from-file manifest.txt \
+  --from-file document-ids.txt \
+  --documents-root /path/to/document-layout \
   --use-hpc --workers 1 --in-flight 2 \
   --hpc-gres gpu:rtx8000:1 --hpc-exclude c001
 ```
@@ -156,6 +174,7 @@ temporary files:
 ```sh
 uv run --script scripts/olmocr2_extract.py \
   --from-file /secure/local/document-list.txt \
+  --documents-root /secure/local/document-layout \
   --use-hpc --workers 1 --in-flight 2 \
   --hpc-gres gpu:rtx8000:1 --hpc-exclude c001 \
   --include-text-native
@@ -168,16 +187,21 @@ Do not use a normal `sbatch` output log for sensitive OCR text; Slurm stdout and
 stderr logs are files on HPC disk. These tunneled commands write OCR output on
 the trusted side.
 
-## Manifest format
+## Input List Formats
 
-Manifest files are plain text with one document path per line:
+Most example wrappers use document-id lists:
 
 ```text
-/path/to/documents/file_001.pdf
-/path/to/documents/page_001.png
+2c232430-2f36-5840-8a5a-9c02d279ca84
+ae3903c0-da53-5893-81c9-43abb13cdf9d
 ```
 
 Blank lines and lines beginning with `#` are ignored.
+
+The lower-level HTTP clients under `hpc/client/` use `--pdf-list` instead.
+That file accepts either one input PDF path per line or `input_pdf<TAB>output_md`
+when you need user-determined output paths. The high-level wrappers generate
+those `--pdf-list` files internally.
 
 ## Contributing
 
@@ -209,4 +233,3 @@ ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 OTHER DEALINGS IN THE SOFTWARE.
 
 For more information, please refer to <https://unlicense.org/> 
-

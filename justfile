@@ -62,15 +62,15 @@ smoke-all *args:
 
 # lint Python scripts and clients with Ruff
 lint:
-    UV_CACHE_DIR=.uv-cache UV_TOOL_DIR=.uv-tools uvx ruff check scripts hpc/client
+    UV_CACHE_DIR=.uv-cache uv run --with ruff==0.15.19 ruff check scripts hpc/client
 
 # check Python formatting without changing files
 format-check:
-    UV_CACHE_DIR=.uv-cache UV_TOOL_DIR=.uv-tools uvx ruff format --check scripts hpc/client
+    UV_CACHE_DIR=.uv-cache uv run --with ruff==0.15.19 ruff format --check scripts hpc/client
 
 # format Python scripts and clients with Ruff
 format:
-    UV_CACHE_DIR=.uv-cache UV_TOOL_DIR=.uv-tools uvx ruff format scripts hpc/client
+    UV_CACHE_DIR=.uv-cache uv run --with ruff==0.15.19 ruff format scripts hpc/client
 
 # Syntax-check scripts that do not need OCR engines or Python dependencies
 test:
