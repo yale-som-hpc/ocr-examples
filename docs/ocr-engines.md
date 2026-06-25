@@ -75,6 +75,18 @@ just smoke-all
 By default, that command requests `gpu:1` for the RTX-capable tunnel engines
 and `gpu:a100:1` for `unlimited_ocr`.
 
+Run the explicit engine/mode/GPU matrix:
+
+```sh
+just smoke-matrix
+```
+
+That enumerates every `ENGINE-MODE-GPU` cell for `rtx` and `a100`, writes
+`results/smoke-matrix/report.tsv`, and skips cells that do not exist in this
+repo such as `pypdf-tunnel-*` and `unlimited_ocr-disk-*`. Disk rows are repeated
+under both GPU labels for matrix completeness, but disk mode does not request a
+Slurm GPU; the GPU class affects tunnel rows.
+
 Run tunnel smoke tests in parallel only when the GPU partition has room:
 
 ```sh
