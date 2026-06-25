@@ -23,12 +23,20 @@ NAMESPACE = uuid.UUID("0c3b3ac8-0d39-45c3-a54b-2b9d4de46dc4")
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--catalog", type=Path, default=Path("examples/sample-documents.tsv"))
+    parser.add_argument(
+        "--catalog", type=Path, default=Path("examples/sample-documents.tsv")
+    )
     parser.add_argument("--sample-dir", type=Path, default=Path("data/samples/pdfs"))
     parser.add_argument("--documents-root", type=Path, default=Path("data/documents"))
-    parser.add_argument("--from-file", type=Path, default=Path("data/samples/documents.txt"))
-    parser.add_argument("--limit", type=int, default=0, help="optional max number of samples")
-    parser.add_argument("--force", action="store_true", help="replace existing document.pdf copies")
+    parser.add_argument(
+        "--from-file", type=Path, default=Path("data/samples/documents.txt")
+    )
+    parser.add_argument(
+        "--limit", type=int, default=0, help="optional max number of samples"
+    )
+    parser.add_argument(
+        "--force", action="store_true", help="replace existing document.pdf copies"
+    )
     return parser.parse_args()
 
 

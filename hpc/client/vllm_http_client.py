@@ -22,6 +22,7 @@ Disk:
   - On the trusted local client: PDFs read from disk, markdown written via
     atomic temp+rename.
 """
+
 from __future__ import annotations
 import argparse
 import asyncio
@@ -33,7 +34,7 @@ import re
 import shlex
 import sys
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
@@ -78,6 +79,7 @@ def ssh_base_args(ssh_key: str) -> list[str]:
 
 # ---- rendering ----
 
+
 def render_pages(pdf_bytes: bytes, scale: float) -> list[Image.Image]:
     doc = pdfium.PdfDocument(io.BytesIO(pdf_bytes))
     pages: list[Image.Image] = []
@@ -108,6 +110,7 @@ def image_to_data_url(img: Image.Image, jpeg_quality: int = 85) -> str:
 
 # ---- SSH plumbing ----
 
+
 @dataclass
 class ServerEndpoint:
     compute_host: str
@@ -118,11 +121,20 @@ class ServerEndpoint:
 
 
 async def launch_vllm_serve(
-    ssh_host: str, ssh_user: str, ssh_key: str, remote_dir: str,
-    partition: str, gres: str, cpus_per_task: int, mem: str, time_str: str,
+    ssh_host: str,
+    ssh_user: str,
+    ssh_key: str,
+    remote_dir: str,
+    partition: str,
+    gres: str,
+    cpus_per_task: int,
+    mem: str,
+    time_str: str,
     job_name: str,
-    model_id: str, max_model_len: int,
-    slurm_script: str, image: str | None,
+    model_id: str,
+    max_model_len: int,
+    slurm_script: str,
+    image: str | None,
     pip_deps: str | None = None,
     patch_mrope: bool = False,
     extra_env: dict[str, str] | None = None,
@@ -195,14 +207,21 @@ async def launch_vllm_serve(
         f"bash {shlex.quote(slurm_script)}"
     )
     cmd = [
-        "ssh", *ssh_base_args(ssh_key), "-T",
-        "-o", "ServerAliveInterval=30",
-        "-o", "ServerAliveCountMax=3",
-        "-o", "BatchMode=yes",
+        "ssh",
+        *ssh_base_args(ssh_key),
+        "-T",
+        "-o",
+        "ServerAliveInterval=30",
+        "-o",
+        "ServerAliveCountMax=3",
+        "-o",
+        "BatchMode=yes",
         ssh_target(ssh_user, ssh_host),
         remote_cmd,
     ]
-    print(f"[serve] launching: ssh ... '{remote_cmd[:120]}…'", file=sys.stderr, flush=True)
+    print(
+        f"[serve] launching: ssh ... '{remote_cmd[:120]}…'", file=sys.stderr, flush=True
+    )
 
     proc = await asyncio.create_subprocess_exec(
         *cmd,
@@ -222,7 +241,9 @@ async def launch_vllm_serve(
             line_bytes = await asyncio.wait_for(proc.stderr.readline(), timeout=10)
         except asyncio.TimeoutError:
             if proc.returncode is not None:
-                raise RuntimeError(f"ssh exited with rc={proc.returncode} before LISTEN")
+                raise RuntimeError(
+                    f"ssh exited with rc={proc.returncode} before LISTEN"
+                )
             continue
         if not line_bytes:
             raise RuntimeError("ssh stderr closed before LISTEN marker")
@@ -268,7 +289,10 @@ async def launch_vllm_serve(
 
 
 async def open_tunnel(
-    ssh_host: str, ssh_user: str, ssh_key: str, endpoint: ServerEndpoint,
+    ssh_host: str,
+    ssh_user: str,
+    ssh_key: str,
+    endpoint: ServerEndpoint,
 ) -> asyncio.subprocess.Process:
     """Open SSH #2: ssh -N -L localhost:0:compute:port login.node.
 
@@ -281,6 +305,7 @@ async def open_tunnel(
     # alternative (ssh -L 0:...) requires parsing ssh's "Allocated port" which
     # depends on -v output.
     import socket
+
     s = socket.socket()
     s.bind(("127.0.0.1", 0))
     local_port = s.getsockname()[1]
@@ -288,16 +313,23 @@ async def open_tunnel(
     endpoint.local_port = local_port
 
     cmd = [
-        "ssh", *ssh_base_args(ssh_key), "-N",
-        "-o", "ExitOnForwardFailure=yes",
-        "-o", "ServerAliveInterval=30",
-        "-o", "ServerAliveCountMax=3",
-        "-L", f"localhost:{local_port}:{endpoint.compute_host}:{endpoint.compute_port}",
+        "ssh",
+        *ssh_base_args(ssh_key),
+        "-N",
+        "-o",
+        "ExitOnForwardFailure=yes",
+        "-o",
+        "ServerAliveInterval=30",
+        "-o",
+        "ServerAliveCountMax=3",
+        "-L",
+        f"localhost:{local_port}:{endpoint.compute_host}:{endpoint.compute_port}",
         ssh_target(ssh_user, ssh_host),
     ]
     print(
         f"[tunnel] localhost:{local_port} -> {endpoint.compute_host}:{endpoint.compute_port}",
-        file=sys.stderr, flush=True,
+        file=sys.stderr,
+        flush=True,
     )
     proc = await asyncio.create_subprocess_exec(
         *cmd,
@@ -325,8 +357,11 @@ async def open_tunnel(
                     return
                 if any(p in line for p in NOISE_PATTERNS):
                     continue
-                print(f"[tunnel] {line.decode('utf-8', 'replace').rstrip()}",
-                      file=sys.stderr, flush=True)
+                print(
+                    f"[tunnel] {line.decode('utf-8', 'replace').rstrip()}",
+                    file=sys.stderr,
+                    flush=True,
+                )
         except Exception:
             pass
 
@@ -335,6 +370,7 @@ async def open_tunnel(
 
 
 # ---- HTTP request ----
+
 
 async def wait_for_ready(client: AsyncOpenAI, model_id: str, deadline_s: float) -> None:
     """Poll /v1/models until vLLM is serving (i.e. model weights loaded)."""
@@ -345,8 +381,11 @@ async def wait_for_ready(client: AsyncOpenAI, model_id: str, deadline_s: float) 
             for m in r.data:
                 if m.id == model_id:
                     elapsed = time.time() - t0
-                    print(f"[ready] vLLM serving {model_id} after {elapsed:.1f}s",
-                          file=sys.stderr, flush=True)
+                    print(
+                        f"[ready] vLLM serving {model_id} after {elapsed:.1f}s",
+                        file=sys.stderr,
+                        flush=True,
+                    )
                     return
         except Exception:
             pass
@@ -354,14 +393,19 @@ async def wait_for_ready(client: AsyncOpenAI, model_id: str, deadline_s: float) 
     raise RuntimeError(f"vLLM didn't become ready within {deadline_s}s")
 
 
-async def ocr_page(client: AsyncOpenAI, data_url: str, model_id: str, prompt: str, max_tokens: int) -> str:
+async def ocr_page(
+    client: AsyncOpenAI, data_url: str, model_id: str, prompt: str, max_tokens: int
+) -> str:
     resp = await client.chat.completions.create(
         model=model_id,
         messages=[
-            {"role": "user", "content": [
-                {"type": "image_url", "image_url": {"url": data_url}},
-                {"type": "text", "text": prompt},
-            ]},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": data_url}},
+                    {"type": "text", "text": prompt},
+                ],
+            },
         ],
         temperature=0.0,
         max_tokens=max_tokens,
@@ -391,11 +435,15 @@ def render_and_encode(pdf_bytes: bytes, scale: float, jpeg_quality: int) -> list
 
 
 async def ocr_pdf(
-    client: AsyncOpenAI, job: PdfJob, scale: float, max_tokens: int,
+    client: AsyncOpenAI,
+    job: PdfJob,
+    scale: float,
+    max_tokens: int,
     pdf_sem: asyncio.Semaphore,
     render_executor: concurrent.futures.Executor,
     jpeg_quality: int,
-    model_id: str, prompt: str,
+    model_id: str,
+    prompt: str,
 ) -> PdfJob:
     """Render → submit all pages concurrently → join markdown → write atomically.
 
@@ -409,16 +457,23 @@ async def ocr_pdf(
             pdf_bytes = job.in_pdf.read_bytes()
             loop = asyncio.get_running_loop()
             data_urls = await loop.run_in_executor(
-                render_executor, render_and_encode, pdf_bytes, scale, jpeg_quality,
+                render_executor,
+                render_and_encode,
+                pdf_bytes,
+                scale,
+                jpeg_quality,
             )
             if not data_urls:
                 job.error = "no pages"
                 job.elapsed_s = time.time() - t0
                 return job
             page_texts = await asyncio.gather(
-                *[ocr_page(client, du, model_id, prompt, max_tokens) for du in data_urls]
+                *[
+                    ocr_page(client, du, model_id, prompt, max_tokens)
+                    for du in data_urls
+                ]
             )
-            parts = [f"<!-- page {i+1} -->\n{t}" for i, t in enumerate(page_texts)]
+            parts = [f"<!-- page {i + 1} -->\n{t}" for i, t in enumerate(page_texts)]
             markdown = "\n\n".join(parts) + "\n"
             payload = markdown.encode("utf-8")
 
@@ -437,6 +492,7 @@ async def ocr_pdf(
 
 
 # ---- multi-worker orchestration ----
+
 
 @dataclass
 class Worker:
@@ -457,14 +513,22 @@ async def launch_one_worker(args: argparse.Namespace, idx: int) -> Worker:
     """
     print(f"[orch] launching worker w{idx}…", file=sys.stderr, flush=True)
     serve_proc, endpoint = await launch_vllm_serve(
-        ssh_host=args.host, ssh_user=args.user, ssh_key=args.key,
+        ssh_host=args.host,
+        ssh_user=args.user,
+        ssh_key=args.key,
         remote_dir=args.remote_dir,
-        partition=args.partition, gres=args.gres,
-        cpus_per_task=args.cpus_per_task, mem=args.mem, time_str=args.time,
+        partition=args.partition,
+        gres=args.gres,
+        cpus_per_task=args.cpus_per_task,
+        mem=args.mem,
+        time_str=args.time,
         job_name=f"vllm-serve-w{idx}-{os.getpid()}",
-        model_id=args.model, max_model_len=args.max_model_len,
-        slurm_script=args.slurm_script, image=args.image,
-        pip_deps=args.pip_deps, patch_mrope=args.patch_mrope,
+        model_id=args.model,
+        max_model_len=args.max_model_len,
+        slurm_script=args.slurm_script,
+        image=args.image,
+        pip_deps=args.pip_deps,
+        patch_mrope=args.patch_mrope,
         exclude=args.exclude,
     )
     tunnel_proc = await open_tunnel(args.host, args.user, args.key, endpoint)
@@ -482,16 +546,26 @@ async def launch_one_worker(args: argparse.Namespace, idx: int) -> Worker:
     # via HPC_LAUNCH_TIMEOUT_S env var if you want it tighter.
     ready_deadline = int(os.environ.get("HPC_LAUNCH_TIMEOUT_S", "1800"))
     await wait_for_ready(client, model_id=args.model, deadline_s=ready_deadline)
-    print(f"[orch] w{idx} ready (port {endpoint.local_port} → {endpoint.compute_host}:{endpoint.compute_port})",
-          file=sys.stderr, flush=True)
+    print(
+        f"[orch] w{idx} ready (port {endpoint.local_port} → {endpoint.compute_host}:{endpoint.compute_port})",
+        file=sys.stderr,
+        flush=True,
+    )
     return Worker(
-        idx=idx, serve_proc=serve_proc, tunnel_proc=tunnel_proc,
-        client=client, endpoint=endpoint,
-        ssh_host=args.host, ssh_user=args.user, ssh_key=args.key,
+        idx=idx,
+        serve_proc=serve_proc,
+        tunnel_proc=tunnel_proc,
+        client=client,
+        endpoint=endpoint,
+        ssh_host=args.host,
+        ssh_user=args.user,
+        ssh_key=args.key,
     )
 
 
-async def cancel_slurm_job(ssh_host: str, ssh_user: str, ssh_key: str, job_id: str | None) -> None:
+async def cancel_slurm_job(
+    ssh_host: str, ssh_user: str, ssh_key: str, job_id: str | None
+) -> None:
     """Best-effort cleanup for ssh-driven srun jobs.
 
     Killing the local ssh process does not always tear down the remote Slurm
@@ -501,8 +575,11 @@ async def cancel_slurm_job(ssh_host: str, ssh_user: str, ssh_key: str, job_id: s
     if not job_id or not re.match(r"^[0-9]+$", job_id):
         return
     cmd = [
-        "ssh", *ssh_base_args(ssh_key), "-T",
-        "-o", "BatchMode=yes",
+        "ssh",
+        *ssh_base_args(ssh_key),
+        "-T",
+        "-o",
+        "BatchMode=yes",
         ssh_target(ssh_user, ssh_host),
         f"scancel {shlex.quote(job_id)}",
     ]
@@ -516,9 +593,17 @@ async def cancel_slurm_job(ssh_host: str, ssh_user: str, ssh_key: str, job_id: s
         _, stderr = await asyncio.wait_for(proc.communicate(), timeout=15)
         if proc.returncode not in (0, None):
             msg = (stderr or b"").decode("utf-8", "replace").strip()
-            print(f"[orch] scancel {job_id} rc={proc.returncode}: {msg}", file=sys.stderr, flush=True)
+            print(
+                f"[orch] scancel {job_id} rc={proc.returncode}: {msg}",
+                file=sys.stderr,
+                flush=True,
+            )
     except Exception as exc:
-        print(f"[orch] scancel {job_id} failed: {type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
+        print(
+            f"[orch] scancel {job_id} failed: {type(exc).__name__}: {exc}",
+            file=sys.stderr,
+            flush=True,
+        )
 
 
 async def teardown_worker(w: Worker) -> None:
@@ -529,7 +614,10 @@ async def teardown_worker(w: Worker) -> None:
         except Exception:
             pass
     await asyncio.gather(
-        *(asyncio.wait_for(p.wait(), timeout=20) for p in (w.tunnel_proc, w.serve_proc)),
+        *(
+            asyncio.wait_for(p.wait(), timeout=20)
+            for p in (w.tunnel_proc, w.serve_proc)
+        ),
         return_exceptions=True,
     )
 
@@ -560,17 +648,25 @@ async def main_async_keep_alive(args: argparse.Namespace) -> int:
     """Launch one worker + tunnel, print READY marker to stdout, block on
     stdin EOF. For consumers that want to drive the served model with their
     own client rather than the built-in PDF queue."""
-    print(f"[orch] launching keep-alive tunnel for model {args.model}",
-          file=sys.stderr, flush=True)
+    print(
+        f"[orch] launching keep-alive tunnel for model {args.model}",
+        file=sys.stderr,
+        flush=True,
+    )
     worker = await launch_one_worker(args, 0)
 
     # Emit the discovery line on stdout so the parent process can parse it.
     # api_key intentionally on the line — caller already trusts our stdout.
     base_url = f"http://localhost:{worker.endpoint.local_port}/v1"
-    print(f"READY base_url={base_url} api_key={worker.endpoint.api_key} model={args.model}",
-          flush=True)
-    print(f"[orch] tunnel ready; waiting for stdin EOF to teardown",
-          file=sys.stderr, flush=True)
+    print(
+        f"READY base_url={base_url} api_key={worker.endpoint.api_key} model={args.model}",
+        flush=True,
+    )
+    print(
+        "[orch] tunnel ready; waiting for stdin EOF to teardown",
+        file=sys.stderr,
+        flush=True,
+    )
 
     # Block until stdin closes (parent process exits or explicitly closes
     # our stdin). asyncio.StreamReader on sys.stdin is the cleanest portable
@@ -615,7 +711,8 @@ async def main_async(args: argparse.Namespace) -> int:
         f"[orch] {len(jobs)} PDFs to process; "
         f"workers={args.workers}, in-flight={args.in_flight} per worker "
         f"(total concurrent: {args.workers * args.in_flight})",
-        file=sys.stderr, flush=True,
+        file=sys.stderr,
+        flush=True,
     )
     if not jobs:
         return 0
@@ -639,7 +736,8 @@ async def main_async(args: argparse.Namespace) -> int:
     if bad:
         print(
             f"[orch] proceeding with {len(live)}/{args.workers} worker(s)",
-            file=sys.stderr, flush=True,
+            file=sys.stderr,
+            flush=True,
         )
     workers = live
 
@@ -651,7 +749,8 @@ async def main_async(args: argparse.Namespace) -> int:
     # pdfium isn't thread-safe; single-threaded render executor shared by ALL
     # workers (in one Python process).
     render_executor = concurrent.futures.ThreadPoolExecutor(
-        max_workers=1, thread_name_prefix="pdfium",
+        max_workers=1,
+        thread_name_prefix="pdfium",
     )
 
     t_start = time.time()
@@ -667,16 +766,25 @@ async def main_async(args: argparse.Namespace) -> int:
                 job = queue.get_nowait()
             except asyncio.QueueEmpty:
                 return
-            j = await ocr_pdf(w.client, job, args.scale, args.max_tokens,
-                              dummy_sem, render_executor, args.jpeg_quality,
-                              args.model, args.prompt_text)
+            j = await ocr_pdf(
+                w.client,
+                job,
+                args.scale,
+                args.max_tokens,
+                dummy_sem,
+                render_executor,
+                args.jpeg_quality,
+                args.model,
+                args.prompt_text,
+            )
             completed.append(j)
             status = "ok" if j.ok else f"ERR {j.error}"
             print(
                 f"[done] w{w.idx} {j.in_pdf.name} → {j.out_md.name}  "
                 f"({j.n_pages}pp, {j.n_chars}B, {j.elapsed_s:.1f}s, {status}; "
                 f"{len(completed)}/{len(jobs)})",
-                file=sys.stderr, flush=True,
+                file=sys.stderr,
+                flush=True,
             )
             queue.task_done()
 
@@ -693,20 +801,22 @@ async def main_async(args: argparse.Namespace) -> int:
         n_err = sum(1 for j in completed if not j.ok)
         print(
             f"\n=== SUMMARY === {n_ok} ok / {n_err} err in {total:.1f}s "
-            f"({n_ok/total*60:.1f} PDFs/min, "
+            f"({n_ok / total * 60:.1f} PDFs/min, "
             f"{args.workers} worker(s) × {args.in_flight} in-flight)",
-            file=sys.stderr, flush=True,
+            file=sys.stderr,
+            flush=True,
         )
 
         if args.report:
             args.report.parent.mkdir(parents=True, exist_ok=True)
             args.report.write_text(
-                "name\tpages\tchars\telapsed_s\tok\terror\n" +
-                "\n".join(
+                "name\tpages\tchars\telapsed_s\tok\terror\n"
+                + "\n".join(
                     f"{j.in_pdf.name}\t{j.n_pages}\t{j.n_chars}\t"
                     f"{j.elapsed_s:.2f}\t{int(j.ok)}\t{j.error or ''}"
                     for j in completed
-                ) + "\n"
+                )
+                + "\n"
             )
             print(f"[orch] timing report → {args.report}", file=sys.stderr)
     finally:
@@ -726,31 +836,51 @@ async def main_async_safe(args: argparse.Namespace) -> int:
         return await main_async(args)
     except Exception as exc:
         import traceback
+
         print(
-            f"\n[FATAL] {type(exc).__name__}: {exc}\n"
-            + traceback.format_exc(),
-            file=sys.stderr, flush=True,
+            f"\n[FATAL] {type(exc).__name__}: {exc}\n" + traceback.format_exc(),
+            file=sys.stderr,
+            flush=True,
         )
         return 2
 
 
 def main() -> None:
     p = argparse.ArgumentParser()
-    p.add_argument("--pdf-list", type=Path, default=None,
-                   help="text file of <input_pdf> or <input_pdf>\\t<output_md> per line. "
-                        "Required unless --keep-alive.")
-    p.add_argument("--out-dir", type=Path, default=None,
-                   help="output dir (used when --pdf-list lines omit explicit dst). "
-                        "Required unless --keep-alive.")
-    p.add_argument("--keep-alive", action="store_true",
-                   help="launch one worker + tunnel, print 'READY base_url=... api_key=... "
-                        "model=...' to stdout, then block on stdin EOF. Used by consumers "
-                        "that drive the served model "
-                        "with their own OpenAI client instead of the built-in PDF queue.")
-    p.add_argument("--workers", type=int, default=1,
-                   help="number of parallel Slurm jobs (one vLLM server per GPU)")
-    p.add_argument("--in-flight", type=int, default=32,
-                   help="max concurrent PDFs in flight PER WORKER")
+    p.add_argument(
+        "--pdf-list",
+        type=Path,
+        default=None,
+        help="text file of <input_pdf> or <input_pdf>\\t<output_md> per line. "
+        "Required unless --keep-alive.",
+    )
+    p.add_argument(
+        "--out-dir",
+        type=Path,
+        default=None,
+        help="output dir (used when --pdf-list lines omit explicit dst). "
+        "Required unless --keep-alive.",
+    )
+    p.add_argument(
+        "--keep-alive",
+        action="store_true",
+        help="launch one worker + tunnel, print 'READY base_url=... api_key=... "
+        "model=...' to stdout, then block on stdin EOF. Used by consumers "
+        "that drive the served model "
+        "with their own OpenAI client instead of the built-in PDF queue.",
+    )
+    p.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        help="number of parallel Slurm jobs (one vLLM server per GPU)",
+    )
+    p.add_argument(
+        "--in-flight",
+        type=int,
+        default=32,
+        help="max concurrent PDFs in flight PER WORKER",
+    )
 
     # SSH / Slurm
     p.add_argument("--host", default=DEFAULT_HOST)
@@ -758,66 +888,109 @@ def main() -> None:
     p.add_argument("--key", default=DEFAULT_KEY)
     p.add_argument("--remote-dir", default=DEFAULT_REMOTE_DIR)
     p.add_argument("--partition", default="gpunormal")
-    p.add_argument("--exclude", default="",
-                   help="Slurm node exclude list, e.g. c001 or c001,c002")
     p.add_argument(
-        "--gres", default="gpu:1",
+        "--exclude", default="", help="Slurm node exclude list, e.g. c001 or c001,c002"
+    )
+    p.add_argument(
+        "--gres",
+        default="gpu:1",
         help="Slurm GRES. 'gpu:1' = any GPU (good default). 'gpu:a100:1' to "
-             "demand A100, 'gpu:rtx8000:1' for RTX 8000, etc.",
+        "demand A100, 'gpu:rtx8000:1' for RTX 8000, etc.",
     )
     p.add_argument("--cpus-per-task", type=int, default=8)
     p.add_argument("--mem", default="64G")
-    p.add_argument("--time", default="02:00:00",
-                   help="Slurm time limit. Full 2169-corpus runs in ~20 min on "
-                        "4 A100s; 2h is generous headroom. Shorter limits queue "
-                        "faster on a busy cluster.")
+    p.add_argument(
+        "--time",
+        default="02:00:00",
+        help="Slurm time limit. Full 2169-corpus runs in ~20 min on "
+        "4 A100s; 2h is generous headroom. Shorter limits queue "
+        "faster on a busy cluster.",
+    )
 
     # Model + prompt — both are model-specific. Defaults preserve olmOCR-2.
-    p.add_argument("--model", default=DEFAULT_MODEL_ID,
-                   help="HF model id to serve. Passed to the Slurm service as "
-                        "VLLM_MODEL. Default preserves olmOCR-2 back-compat.")
-    p.add_argument("--max-model-len", type=int, default=8192,
-                   help="vLLM --max-model-len. Forwarded as VLLM_MAX_MODEL_LEN.")
+    p.add_argument(
+        "--model",
+        default=DEFAULT_MODEL_ID,
+        help="HF model id to serve. Passed to the Slurm service as "
+        "VLLM_MODEL. Default preserves olmOCR-2 back-compat.",
+    )
+    p.add_argument(
+        "--max-model-len",
+        type=int,
+        default=8192,
+        help="vLLM --max-model-len. Forwarded as VLLM_MAX_MODEL_LEN.",
+    )
 
     # Per-model dependency isolation. Default uses the Apptainer slurm script
     # so colleagues do not need a prebuilt repo-local vLLM virtualenv.
-    p.add_argument("--slurm-script", default="hpc/slurm/vllm_serve_apptainer.slurm",
-                   help="path (relative to remote_dir) of the slurm script to "
-                        "execute.")
-    p.add_argument("--image", default=None,
-                   help="apptainer image URI (e.g. docker://vllm/vllm-openai:v0.6.3). "
-                        "Required; forwarded as VLLM_IMAGE env var.")
-    p.add_argument("--pip-deps", default=None,
-                   help="space-separated extra Python deps the model's trust-remote-code "
-                        "modeling imports (e.g. 'addict matplotlib' for DeepSeek-OCR-2). "
-                        "Installed with uv inside the apptainer container at startup. "
-                        "Forwarded as VLLM_PIP_DEPS env var.")
-    p.add_argument("--patch-mrope", action="store_true",
-                   help="Bind-mount the patched mrope.py from vLLM PR #42765 into the "
-                        "container. Required for GLM-OCR — the unpatched Triton MRoPE "
-                        "kernel hardcodes NeoX-style rotation and produces degenerate "
-                        "output for GLM models which use GPT-J-style rotation. The "
-                        "patched file must exist at hpc/patches/vllm-pr42765/mrope.py "
-                        "on the cluster side.")
+    p.add_argument(
+        "--slurm-script",
+        default="hpc/slurm/vllm_serve_apptainer.slurm",
+        help="path (relative to remote_dir) of the slurm script to execute.",
+    )
+    p.add_argument(
+        "--image",
+        default=None,
+        help="apptainer image URI (e.g. docker://vllm/vllm-openai:v0.6.3). "
+        "Required; forwarded as VLLM_IMAGE env var.",
+    )
+    p.add_argument(
+        "--pip-deps",
+        default=None,
+        help="space-separated extra Python deps the model's trust-remote-code "
+        "modeling imports (e.g. 'addict matplotlib' for DeepSeek-OCR-2). "
+        "Installed with uv inside the apptainer container at startup. "
+        "Forwarded as VLLM_PIP_DEPS env var.",
+    )
+    p.add_argument(
+        "--patch-mrope",
+        action="store_true",
+        help="Bind-mount the patched mrope.py from vLLM PR #42765 into the "
+        "container. Required for GLM-OCR — the unpatched Triton MRoPE "
+        "kernel hardcodes NeoX-style rotation and produces degenerate "
+        "output for GLM models which use GPT-J-style rotation. The "
+        "patched file must exist at hpc/patches/vllm-pr42765/mrope.py "
+        "on the cluster side.",
+    )
     pg = p.add_mutually_exclusive_group()
-    pg.add_argument("--prompt", default=None,
-                    help="per-page instruction text. Overrides the default. "
-                         "Mutually exclusive with --prompt-file.")
-    pg.add_argument("--prompt-file", type=Path, default=None,
-                    help="path to a UTF-8 text file containing the per-page "
-                         "instruction. Mutually exclusive with --prompt.")
+    pg.add_argument(
+        "--prompt",
+        default=None,
+        help="per-page instruction text. Overrides the default. "
+        "Mutually exclusive with --prompt-file.",
+    )
+    pg.add_argument(
+        "--prompt-file",
+        type=Path,
+        default=None,
+        help="path to a UTF-8 text file containing the per-page "
+        "instruction. Mutually exclusive with --prompt.",
+    )
 
     # Rendering / inference
-    p.add_argument("--scale", type=float, default=1.5,
-                   help="pdfium render scale; 1.5 ≈ 220 DPI, plenty for OCR")
-    p.add_argument("--jpeg-quality", type=int, default=85,
-                   help="JPEG quality 1-95 (85 is a good throughput/quality knee)")
+    p.add_argument(
+        "--scale",
+        type=float,
+        default=1.5,
+        help="pdfium render scale; 1.5 ≈ 220 DPI, plenty for OCR",
+    )
+    p.add_argument(
+        "--jpeg-quality",
+        type=int,
+        default=85,
+        help="JPEG quality 1-95 (85 is a good throughput/quality knee)",
+    )
     p.add_argument("--max-tokens", type=int, default=4096)
 
-    p.add_argument("--force", action="store_true",
-                   help="re-OCR PDFs whose markdown already exists")
-    p.add_argument("--report", type=Path, default=None,
-                   help="optional tab-separated per-PDF report")
+    p.add_argument(
+        "--force", action="store_true", help="re-OCR PDFs whose markdown already exists"
+    )
+    p.add_argument(
+        "--report",
+        type=Path,
+        default=None,
+        help="optional tab-separated per-PDF report",
+    )
     args = p.parse_args()
 
     # Validate. --keep-alive mode doesn't need pdf-list/out-dir/prompt.

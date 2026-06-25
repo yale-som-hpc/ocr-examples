@@ -60,6 +60,18 @@ smoke engine="all" mode="all" *args:
 smoke-all *args:
     uv run scripts/smoke_tests.py --engine all --mode all {{args}}
 
+# lint Python scripts and clients with Ruff
+lint:
+    UV_CACHE_DIR=.uv-cache UV_TOOL_DIR=.uv-tools uvx ruff check scripts hpc/client
+
+# check Python formatting without changing files
+format-check:
+    UV_CACHE_DIR=.uv-cache UV_TOOL_DIR=.uv-tools uvx ruff format --check scripts hpc/client
+
+# format Python scripts and clients with Ruff
+format:
+    UV_CACHE_DIR=.uv-cache UV_TOOL_DIR=.uv-tools uvx ruff format scripts hpc/client
+
 # Syntax-check scripts that do not need OCR engines or Python dependencies
 test:
     uv run python -c 'import ast, pathlib; files=("scripts/download_sample_documents.py","scripts/prepare_sample_documents.py","scripts/ocr_engine_disk.py","scripts/ocr_provenance.py","scripts/hpc_jobs.py","scripts/smoke_tests.py","scripts/documents_extract.py","scripts/olmocr2_extract.py","scripts/deepseek_ocr_extract.py","scripts/glm_ocr_extract.py","scripts/unlimited_ocr_extract.py","scripts/documents_process.py","hpc/client/vllm_http_client.py","hpc/client/docling_http_client.py","hpc/client/unlimited_ocr_client.py"); [ast.parse(pathlib.Path(f).read_text(), filename=f) for f in files]'

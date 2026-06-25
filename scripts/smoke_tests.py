@@ -13,6 +13,7 @@ Unsupported combinations are skipped in the full matrix:
   pypdf tunnel         pypdf is local text extraction, no service backend
   unlimited_ocr disk   Unlimited-OCR is CUDA/SGLang-only in these examples
 """
+
 from __future__ import annotations
 
 import argparse
@@ -75,7 +76,10 @@ def run(cmd: list[str], *, label: str, timeout: int | None = None) -> int:
         rc = proc.wait(timeout=timeout)
     except subprocess.TimeoutExpired:
         elapsed = time.monotonic() - started
-        print(f"=== {label} TIMEOUT after {elapsed:.1f}s; terminating process group ===", flush=True)
+        print(
+            f"=== {label} TIMEOUT after {elapsed:.1f}s; terminating process group ===",
+            flush=True,
+        )
         try:
             os.killpg(proc.pid, signal.SIGTERM)
             proc.wait(timeout=10)
@@ -105,7 +109,9 @@ def terminate_active_processes() -> None:
                 pass
 
 
-def run_case(case: SmokeCase, args: argparse.Namespace, ids: list[str]) -> tuple[str, int]:
+def run_case(
+    case: SmokeCase, args: argparse.Namespace, ids: list[str]
+) -> tuple[str, int]:
     label = f"{case.engine}:{case.mode}"
     if case.mode == "disk":
         cmd = disk_command(case, args, ids[0])
@@ -141,15 +147,23 @@ def ensure_sample_documents(args: argparse.Namespace) -> tuple[list[str], Path]:
         smoke_list.write_text("\n".join(ids) + "\n", encoding="utf-8")
         return ids, smoke_list
 
-    rc = run(["uv", "run", "scripts/download_sample_documents.py"], label="prepare:download-samples")
+    rc = run(
+        ["uv", "run", "scripts/download_sample_documents.py"],
+        label="prepare:download-samples",
+    )
     if rc != 0:
         raise SystemExit(rc)
 
     prepare_cmd = [
-        "uv", "run", "scripts/prepare_sample_documents.py",
-        "--documents-root", str(args.documents_root),
-        "--from-file", str(args.smoke_list),
-        "--limit", str(args.sample_count),
+        "uv",
+        "run",
+        "scripts/prepare_sample_documents.py",
+        "--documents-root",
+        str(args.documents_root),
+        "--from-file",
+        str(args.smoke_list),
+        "--limit",
+        str(args.sample_count),
     ]
     if args.force_prepare:
         prepare_cmd.append("--force")
@@ -175,17 +189,24 @@ def unsupported_reason(case: SmokeCase) -> str | None:
     return None
 
 
-def disk_command(case: SmokeCase, args: argparse.Namespace, document_id: str) -> list[str]:
+def disk_command(
+    case: SmokeCase, args: argparse.Namespace, document_id: str
+) -> list[str]:
     pdf = args.documents_root / document_id / "document.pdf"
     if not pdf.exists():
         raise SystemExit(f"sample PDF not found: {pdf}")
     outdir = args.out_dir / "disk"
     return [
-        "uv", "run", "scripts/ocr_engine_disk.py",
+        "uv",
+        "run",
+        "scripts/ocr_engine_disk.py",
         str(pdf),
-        "--engine", case.engine,
-        "--outdir", str(outdir),
-        "--max-tokens", str(args.max_tokens),
+        "--engine",
+        case.engine,
+        "--outdir",
+        str(outdir),
+        "--max-tokens",
+        str(args.max_tokens),
     ]
 
 
@@ -195,24 +216,38 @@ def tunnel_hpc_gres(case: SmokeCase, args: argparse.Namespace) -> str:
     return args.hpc_gres
 
 
-def tunnel_command(case: SmokeCase, args: argparse.Namespace, ids: list[str]) -> list[str]:
+def tunnel_command(
+    case: SmokeCase, args: argparse.Namespace, ids: list[str]
+) -> list[str]:
     hpc_gres = tunnel_hpc_gres(case, args)
     common = [
-        "--documents-root", str(args.documents_root),
-        "--from-file", str(args.smoke_list),
+        "--documents-root",
+        str(args.documents_root),
+        "--from-file",
+        str(args.smoke_list),
         "--force",
     ]
     if case.engine == "docling":
         cmd = [
-            "uv", "run", "--script", "scripts/documents_extract.py",
-            "--documents-root", str(args.documents_root),
+            "uv",
+            "run",
+            "--script",
+            "scripts/documents_extract.py",
+            "--documents-root",
+            str(args.documents_root),
             "--use-hpc-for-docling",
-            "--hpc-workers", str(args.workers),
-            "--hpc-in-flight", str(args.in_flight),
-            "--hpc-gres", hpc_gres,
-            "--hpc-mem", args.hpc_mem,
-            "--hpc-cpus", str(args.hpc_cpus),
-            "--hpc-time", args.hpc_time,
+            "--hpc-workers",
+            str(args.workers),
+            "--hpc-in-flight",
+            str(args.in_flight),
+            "--hpc-gres",
+            hpc_gres,
+            "--hpc-mem",
+            args.hpc_mem,
+            "--hpc-cpus",
+            str(args.hpc_cpus),
+            "--hpc-time",
+            args.hpc_time,
             "--force",
         ]
         if args.hpc_exclude:
@@ -228,15 +263,24 @@ def tunnel_command(case: SmokeCase, args: argparse.Namespace, ids: list[str]) ->
         "unlimited_ocr": "scripts/unlimited_ocr_extract.py",
     }[case.engine]
     cmd = [
-        "uv", "run", "--script", script,
+        "uv",
+        "run",
+        "--script",
+        script,
         *common,
         "--use-hpc",
-        "--workers", str(args.workers),
-        "--in-flight", str(args.in_flight),
-        "--hpc-gres", hpc_gres,
-        "--hpc-mem", args.hpc_mem,
-        "--hpc-cpus", str(args.hpc_cpus),
-        "--hpc-time", args.hpc_time,
+        "--workers",
+        str(args.workers),
+        "--in-flight",
+        str(args.in_flight),
+        "--hpc-gres",
+        hpc_gres,
+        "--hpc-mem",
+        args.hpc_mem,
+        "--hpc-cpus",
+        str(args.hpc_cpus),
+        "--hpc-time",
+        args.hpc_time,
         "--include-text-native",
     ]
     if args.hpc_exclude:
@@ -245,53 +289,104 @@ def tunnel_command(case: SmokeCase, args: argparse.Namespace, ids: list[str]) ->
 
 
 def cleanup_hpc_jobs() -> int:
-    return run(["uv", "run", "scripts/hpc_jobs.py", "cleanup"], label="cleanup:hpc-ocr-jobs")
+    return run(
+        ["uv", "run", "scripts/hpc_jobs.py", "cleanup"], label="cleanup:hpc-ocr-jobs"
+    )
 
 
 def hpc_status() -> int:
-    return run(["uv", "run", "scripts/hpc_jobs.py", "status", "--ocr-only"], label="status:hpc-ocr-jobs")
+    return run(
+        ["uv", "run", "scripts/hpc_jobs.py", "status", "--ocr-only"],
+        label="status:hpc-ocr-jobs",
+    )
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--engine", default="all",
-                        help="engine slug or all. Aliases: deepseek, glm, unlimited")
+    parser.add_argument(
+        "--engine",
+        default="all",
+        help="engine slug or all. Aliases: deepseek, glm, unlimited",
+    )
     parser.add_argument("--mode", default="all", choices=("all", "disk", "tunnel"))
-    parser.add_argument("--sample-count", type=int, default=1,
-                        help="number of public sample documents to test")
+    parser.add_argument(
+        "--sample-count",
+        type=int,
+        default=1,
+        help="number of public sample documents to test",
+    )
     parser.add_argument("--documents-root", type=Path, default=Path("data/documents"))
-    parser.add_argument("--from-file", type=Path,
-                        help="optional existing document-id list; otherwise public samples are prepared")
-    parser.add_argument("--smoke-list", type=Path, default=Path("data/samples/smoke-documents.txt"),
-                        help="document-id list written/read by smoke tests")
+    parser.add_argument(
+        "--from-file",
+        type=Path,
+        help="optional existing document-id list; otherwise public samples are prepared",
+    )
+    parser.add_argument(
+        "--smoke-list",
+        type=Path,
+        default=Path("data/samples/smoke-documents.txt"),
+        help="document-id list written/read by smoke tests",
+    )
     parser.add_argument("--out-dir", type=Path, default=Path("results/smoke"))
-    parser.add_argument("--max-tokens", type=int, default=1024,
-                        help="disk-mode MLX max token cap for quick smoke tests")
+    parser.add_argument(
+        "--max-tokens",
+        type=int,
+        default=1024,
+        help="disk-mode MLX max token cap for quick smoke tests",
+    )
     parser.add_argument("--workers", type=int, default=1)
     parser.add_argument("--in-flight", type=int, default=1)
-    parser.add_argument("--parallel-tunnel", type=int, default=1,
-                        help="number of tunnel smoke tests to run at once. Use >1 only when "
-                             "the GPU partition has room.")
-    parser.add_argument("--hpc-gres", default=DEFAULT_HPC_GRES,
-                        help="Slurm GPU request for tunnel smoke tests. Use gpu:rtx8000:1 "
-                             "for RTX-capable engines. If omitted, Unlimited-OCR smoke tests "
-                             "request gpu:a100:1 because the current SGLang backend needs it.")
-    parser.add_argument("--hpc-exclude", default="",
-                        help="Slurm node exclude list for tunnel smoke tests, e.g. c001")
-    parser.add_argument("--hpc-mem", default="64G",
-                        help="Slurm memory request per tunnel worker. Docling has its own lower default "
-                             "unless this shared smoke-test override is set.")
-    parser.add_argument("--hpc-cpus", type=int, default=8,
-                        help="Slurm CPU request per tunnel worker")
+    parser.add_argument(
+        "--parallel-tunnel",
+        type=int,
+        default=1,
+        help="number of tunnel smoke tests to run at once. Use >1 only when "
+        "the GPU partition has room.",
+    )
+    parser.add_argument(
+        "--hpc-gres",
+        default=DEFAULT_HPC_GRES,
+        help="Slurm GPU request for tunnel smoke tests. Use gpu:rtx8000:1 "
+        "for RTX-capable engines. If omitted, Unlimited-OCR smoke tests "
+        "request gpu:a100:1 because the current SGLang backend needs it.",
+    )
+    parser.add_argument(
+        "--hpc-exclude",
+        default="",
+        help="Slurm node exclude list for tunnel smoke tests, e.g. c001",
+    )
+    parser.add_argument(
+        "--hpc-mem",
+        default="64G",
+        help="Slurm memory request per tunnel worker. Docling has its own lower default "
+        "unless this shared smoke-test override is set.",
+    )
+    parser.add_argument(
+        "--hpc-cpus", type=int, default=8, help="Slurm CPU request per tunnel worker"
+    )
     parser.add_argument("--hpc-time", default="02:00:00")
-    parser.add_argument("--disk-timeout", type=int, default=600,
-                        help="per disk smoke timeout in seconds")
-    parser.add_argument("--tunnel-timeout", type=int, default=1800,
-                        help="per tunnel smoke timeout in seconds")
-    parser.add_argument("--force-prepare", action="store_true",
-                        help="overwrite sample document.pdf copies during preparation")
-    parser.add_argument("--no-cleanup-on-failure", action="store_true",
-                        help="do not call scripts/hpc_jobs.py cleanup after a failed tunnel smoke")
+    parser.add_argument(
+        "--disk-timeout",
+        type=int,
+        default=600,
+        help="per disk smoke timeout in seconds",
+    )
+    parser.add_argument(
+        "--tunnel-timeout",
+        type=int,
+        default=1800,
+        help="per tunnel smoke timeout in seconds",
+    )
+    parser.add_argument(
+        "--force-prepare",
+        action="store_true",
+        help="overwrite sample document.pdf copies during preparation",
+    )
+    parser.add_argument(
+        "--no-cleanup-on-failure",
+        action="store_true",
+        help="do not call scripts/hpc_jobs.py cleanup after a failed tunnel smoke",
+    )
     args = parser.parse_args()
     args.engine = normalize_engine(args.engine)
     args.mode = normalize_mode(args.mode)
@@ -309,7 +404,9 @@ def main() -> int:
     if exact_single:
         reason = unsupported_reason(cases[0])
         if reason:
-            print(f"=== {cases[0].engine}:{cases[0].mode} SKIP: {reason} ===", flush=True)
+            print(
+                f"=== {cases[0].engine}:{cases[0].mode} SKIP: {reason} ===", flush=True
+            )
             return 0
 
     ids, _ = ensure_sample_documents(args)
@@ -355,8 +452,7 @@ def main() -> int:
         pool = concurrent.futures.ThreadPoolExecutor(max_workers=args.parallel_tunnel)
         try:
             future_to_case = {
-                pool.submit(run_case, case, args, ids): case
-                for case in tunnel_cases
+                pool.submit(run_case, case, args, ids): case for case in tunnel_cases
             }
             for future in concurrent.futures.as_completed(future_to_case):
                 label, rc = future.result()

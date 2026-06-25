@@ -29,6 +29,7 @@ Sidecar schema (v1):
 
 The `engine_slug` is the canonical filename stem; the rest is interpretive.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -43,7 +44,6 @@ OCR_SCHEMA_VERSION = 1
 ENGINE_PYPDF = "pypdf"
 ENGINE_DOCLING = "docling"
 ENGINE_OLMOCR2 = "olmocr2"
-ENGINE_PADDLEOCR = "paddleocr"
 ENGINE_GLM_OCR = "glm_ocr"
 ENGINE_DEEPSEEK_OCR = "deepseek_ocr"
 ENGINE_UNLIMITED_OCR = "unlimited_ocr"
@@ -54,7 +54,6 @@ ENGINE_LABEL: dict[str, str] = {
     ENGINE_PYPDF: "pypdf",
     ENGINE_DOCLING: "docling",
     ENGINE_OLMOCR2: "olmOCR-2",
-    ENGINE_PADDLEOCR: "PaddleOCR-VL",
     ENGINE_GLM_OCR: "GLM-OCR",
     ENGINE_DEEPSEEK_OCR: "DeepSeek-OCR-2",
     ENGINE_UNLIMITED_OCR: "Unlimited-OCR",
@@ -66,7 +65,6 @@ ENGINE_METHOD: dict[str, str] = {
     ENGINE_PYPDF: "pdf-text-extraction",
     ENGINE_DOCLING: "vlm-vision",
     ENGINE_OLMOCR2: "vlm-vision",
-    ENGINE_PADDLEOCR: "vlm-vision",
     ENGINE_GLM_OCR: "vlm-vision",
     ENGINE_DEEPSEEK_OCR: "vlm-vision",
     ENGINE_UNLIMITED_OCR: "vlm-vision",
@@ -144,7 +142,8 @@ def write_ocr_result(
     json_path = ocr_sidecar_path(document_dir, engine)
     tmp_json = json_path.with_suffix(".json.tmp")
     tmp_json.write_text(
-        json.dumps(sidecar, indent=2, sort_keys=True, ensure_ascii=False, default=str) + "\n",
+        json.dumps(sidecar, indent=2, sort_keys=True, ensure_ascii=False, default=str)
+        + "\n",
         encoding="utf-8",
     )
     tmp_json.replace(json_path)

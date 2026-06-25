@@ -26,10 +26,9 @@ Usage:
   uv run --script scripts/deepseek_ocr_extract.py --document <guid>
   uv run --script scripts/deepseek_ocr_extract.py --all-local --use-hpc --workers 4
 """
+
 from __future__ import annotations
 import argparse
-import json
-import os
 import re
 import subprocess
 import sys
@@ -95,44 +94,83 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--document", action="append", default=[])
     p.add_argument("--from-file", type=Path)
-    p.add_argument("--all-local", action="store_true",
-                   help="run on every document dir under --documents-root that has document.pdf")
+    p.add_argument(
+        "--all-local",
+        action="store_true",
+        help="run on every document dir under --documents-root that has document.pdf",
+    )
     p.add_argument("--documents-root", type=Path, default=Path("data/documents"))
     p.add_argument("--max-tokens", type=int, default=4096)
     p.add_argument("--scale", type=float, default=2.0)
     p.add_argument("--force", action="store_true")
-    p.add_argument("--include-text-native", action="store_true",
-                   help="Also run DeepSeek-OCR on documents where pypdf already produced clean text.")
-    p.add_argument("--mlx-model", default=MLX_MODEL_DEFAULT,
-                   help="MLX model id (Apple Silicon). Override if a different quant is preferred.")
+    p.add_argument(
+        "--include-text-native",
+        action="store_true",
+        help="Also run DeepSeek-OCR on documents where pypdf already produced clean text.",
+    )
+    p.add_argument(
+        "--mlx-model",
+        default=MLX_MODEL_DEFAULT,
+        help="MLX model id (Apple Silicon). Override if a different quant is preferred.",
+    )
 
-    p.add_argument("--use-hpc", action="store_true",
-                   help="Outsource OCR to the SOM HPC cluster via vLLM HTTP.")
-    p.add_argument("--workers", type=int, default=2,
-                   help="(--use-hpc) parallel Slurm jobs / GPUs")
-    p.add_argument("--in-flight", type=int, default=16,
-                   help="(--use-hpc) concurrent PDFs per worker. DeepSeek-OCR-2's MoE "
-                        "design means active params ~570M; headroom is generous on A100.")
-    p.add_argument("--hpc-client",
-                   default=str(Path(__file__).resolve().parent.parent / "hpc/client/vllm_http_client.py"),
-                   help="(--use-hpc) path to vllm_http_client.py")
-    p.add_argument("--hpc-gres", default="gpu:1",
-                   help="(--use-hpc) Slurm GRES. Default is any GPU; pass gpu:a100:1 "
-                        "if the selected vLLM image fails on older GPU types.")
-    p.add_argument("--hpc-exclude", default="",
-                   help="(--use-hpc) Slurm node exclude list, e.g. c001")
-    p.add_argument("--hpc-mem", default="64G",
-                   help="(--use-hpc) Slurm memory request per worker")
-    p.add_argument("--hpc-cpus", type=int, default=8,
-                   help="(--use-hpc) Slurm CPU request per worker")
-    p.add_argument("--hpc-time", default="02:00:00",
-                   help="(--use-hpc) Slurm time limit per worker.")
-    p.add_argument("--hpc-max-model-len", type=int, default=8192,
-                   help="(--use-hpc) vLLM --max-model-len. DeepSeek-OCR-2's config.json "
-                        "declares max_position_embeddings=8192 (the token-compression "
-                        "encoder produces dense representations rather than long sequences); "
-                        "going higher requires VLLM_ALLOW_LONG_MAX_MODEL_LEN=1 and risks "
-                        "incorrect outputs.")
+    p.add_argument(
+        "--use-hpc",
+        action="store_true",
+        help="Outsource OCR to the SOM HPC cluster via vLLM HTTP.",
+    )
+    p.add_argument(
+        "--workers", type=int, default=2, help="(--use-hpc) parallel Slurm jobs / GPUs"
+    )
+    p.add_argument(
+        "--in-flight",
+        type=int,
+        default=16,
+        help="(--use-hpc) concurrent PDFs per worker. DeepSeek-OCR-2's MoE "
+        "design means active params ~570M; headroom is generous on A100.",
+    )
+    p.add_argument(
+        "--hpc-client",
+        default=str(
+            Path(__file__).resolve().parent.parent / "hpc/client/vllm_http_client.py"
+        ),
+        help="(--use-hpc) path to vllm_http_client.py",
+    )
+    p.add_argument(
+        "--hpc-gres",
+        default="gpu:1",
+        help="(--use-hpc) Slurm GRES. Default is any GPU; pass gpu:a100:1 "
+        "if the selected vLLM image fails on older GPU types.",
+    )
+    p.add_argument(
+        "--hpc-exclude",
+        default="",
+        help="(--use-hpc) Slurm node exclude list, e.g. c001",
+    )
+    p.add_argument(
+        "--hpc-mem", default="64G", help="(--use-hpc) Slurm memory request per worker"
+    )
+    p.add_argument(
+        "--hpc-cpus",
+        type=int,
+        default=8,
+        help="(--use-hpc) Slurm CPU request per worker",
+    )
+    p.add_argument(
+        "--hpc-time",
+        default="02:00:00",
+        help="(--use-hpc) Slurm time limit per worker.",
+    )
+    p.add_argument(
+        "--hpc-max-model-len",
+        type=int,
+        default=8192,
+        help="(--use-hpc) vLLM --max-model-len. DeepSeek-OCR-2's config.json "
+        "declares max_position_embeddings=8192 (the token-compression "
+        "encoder produces dense representations rather than long sequences); "
+        "going higher requires VLLM_ALLOW_LONG_MAX_MODEL_LEN=1 and risks "
+        "incorrect outputs.",
+    )
 
     args = p.parse_args()
 
@@ -147,7 +185,9 @@ def main():
         documents += [
             child.name
             for child in args.documents_root.iterdir()
-            if child.is_dir() and GUID_RE.match(child.name) and (child / "document.pdf").exists()
+            if child.is_dir()
+            and GUID_RE.match(child.name)
+            and (child / "document.pdf").exists()
         ]
     documents = sorted({s.lower() for s in documents if GUID_RE.match(s)})
     if not documents:
@@ -163,7 +203,10 @@ def main():
                 continue
             filtered.append(document)
         if skip_text_native:
-            print(f"skipping {skip_text_native} documents with usable ocr/pypdf.txt (pass --include-text-native to override)", flush=True)
+            print(
+                f"skipping {skip_text_native} documents with usable ocr/pypdf.txt (pass --include-text-native to override)",
+                flush=True,
+            )
         documents = filtered
         if not documents:
             print("no documents left to process after gating; done", flush=True)
@@ -183,46 +226,73 @@ def main():
             if txt_path.exists() and sidecar_path.exists() and not args.force:
                 continue
             txt_path.parent.mkdir(parents=True, exist_ok=True)
-            jobs_to_run.append((document, pdf_path.resolve(), sidecar_path, txt_path.resolve()))
+            jobs_to_run.append(
+                (document, pdf_path.resolve(), sidecar_path, txt_path.resolve())
+            )
         if not jobs_to_run:
             print("no documents left to process; done", flush=True)
             return
 
         with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".tsv", delete=False, encoding="utf-8",
+            mode="w",
+            suffix=".tsv",
+            delete=False,
+            encoding="utf-8",
         ) as fh:
             tsv_path = Path(fh.name)
             for _, in_p, _, out_p in jobs_to_run:
                 fh.write(f"{in_p}\t{out_p}\n")
-        prompt_path = Path(tempfile.mkstemp(prefix="deepseek_ocr_prompt_", suffix=".txt")[1])
+        prompt_path = Path(
+            tempfile.mkstemp(prefix="deepseek_ocr_prompt_", suffix=".txt")[1]
+        )
         prompt_path.write_text(PROMPT, encoding="utf-8")
         scratch_dir = Path(tempfile.mkdtemp(prefix="deepseek_ocr_hpc_"))
 
         cmd = [
-            "uv", "run",
-            "--with", "openai>=1.40",
-            "--with", "httpx>=0.27",
-            "--with", "pypdfium2>=4.30",
-            "--with", "pillow>=11",
+            "uv",
+            "run",
+            "--with",
+            "openai>=1.40",
+            "--with",
+            "httpx>=0.27",
+            "--with",
+            "pypdfium2>=4.30",
+            "--with",
+            "pillow>=11",
             args.hpc_client,
-            "--pdf-list", str(tsv_path),
-            "--out-dir", str(scratch_dir),
-            "--workers", str(args.workers),
-            "--in-flight", str(args.in_flight),
-            "--gres", args.hpc_gres,
-            "--mem", args.hpc_mem,
-            "--cpus-per-task", str(args.hpc_cpus),
-            "--time", args.hpc_time,
-            "--max-tokens", str(args.max_tokens),
-            "--model", HPC_MODEL,
-            "--max-model-len", str(args.hpc_max_model_len),
-            "--prompt-file", str(prompt_path),
-            "--slurm-script", "hpc/slurm/vllm_serve_apptainer.slurm",
-            "--image", HPC_IMAGE,
+            "--pdf-list",
+            str(tsv_path),
+            "--out-dir",
+            str(scratch_dir),
+            "--workers",
+            str(args.workers),
+            "--in-flight",
+            str(args.in_flight),
+            "--gres",
+            args.hpc_gres,
+            "--mem",
+            args.hpc_mem,
+            "--cpus-per-task",
+            str(args.hpc_cpus),
+            "--time",
+            args.hpc_time,
+            "--max-tokens",
+            str(args.max_tokens),
+            "--model",
+            HPC_MODEL,
+            "--max-model-len",
+            str(args.hpc_max_model_len),
+            "--prompt-file",
+            str(prompt_path),
+            "--slurm-script",
+            "hpc/slurm/vllm_serve_apptainer.slurm",
+            "--image",
+            HPC_IMAGE,
             # DeepSeek-OCR-2's modeling_deepseekv2.py imports `addict` and
             # `matplotlib`. They aren't in the vllm/vllm-openai base image;
             # the slurm script installs them with uv inside the container.
-            "--pip-deps", "addict matplotlib",
+            "--pip-deps",
+            "addict matplotlib",
         ]
         if args.hpc_exclude:
             cmd.extend(["--exclude", args.hpc_exclude])
@@ -276,8 +346,10 @@ def main():
                 },
             )
             written += 1
-        print(f"\nHPC backend rc={rc}; wrote {written}/{len(jobs_to_run)} (.txt + .json)",
-              flush=True)
+        print(
+            f"\nHPC backend rc={rc}; wrote {written}/{len(jobs_to_run)} (.txt + .json)",
+            flush=True,
+        )
         sys.exit(0 if rc == 0 else rc)
 
     # ---- Local MLX backend ----

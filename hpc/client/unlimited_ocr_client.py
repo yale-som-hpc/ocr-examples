@@ -16,6 +16,7 @@ Input PDF bytes never touch HPC disk. Pages are rendered and JPEG-encoded on
 the trusted local client, then sent through the SSH tunnel to the in-memory
 SGLang server.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -67,7 +68,9 @@ class DeepseekOCRNoRepeatNGramLogitProcessor:
     but keeps the local client from needing a full SGLang install.
     """
 
-    def __call__(self, logits: Any, custom_param_list: Optional[list[dict[str, Any]]] = None) -> Any:
+    def __call__(
+        self, logits: Any, custom_param_list: Optional[list[dict[str, Any]]] = None
+    ) -> Any:
         if not custom_param_list:
             return logits
         for batch_idx, params in enumerate(custom_param_list):
@@ -92,10 +95,12 @@ class DeepseekOCRNoRepeatNGramLogitProcessor:
             if search_end <= search_start:
                 continue
 
-            current_prefix = tuple(sequence[-(ngram_size - 1):]) if ngram_size > 1 else tuple()
+            current_prefix = (
+                tuple(sequence[-(ngram_size - 1) :]) if ngram_size > 1 else tuple()
+            )
             banned_tokens: set[int] = set()
             for idx in range(search_start, search_end):
-                ngram = sequence[idx: idx + ngram_size]
+                ngram = sequence[idx : idx + ngram_size]
                 if ngram_size == 1 or tuple(ngram[:-1]) == current_prefix:
                     banned_tokens.add(ngram[-1])
 
@@ -160,7 +165,9 @@ def image_to_data_url(img: Image.Image, jpeg_quality: int) -> str:
 
 
 def render_and_encode(pdf_bytes: bytes, scale: float, jpeg_quality: int) -> list[str]:
-    return [image_to_data_url(page, jpeg_quality) for page in render_pages(pdf_bytes, scale)]
+    return [
+        image_to_data_url(page, jpeg_quality) for page in render_pages(pdf_bytes, scale)
+    ]
 
 
 def parse_pdf_list(list_path: Path, default_out_dir: Path) -> list[tuple[Path, Path]]:
@@ -181,10 +188,13 @@ def request_payload(args: argparse.Namespace, data_url: str) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "model": args.served_model_name,
         "messages": [
-            {"role": "user", "content": [
-                {"type": "text", "text": args.prompt},
-                {"type": "image_url", "image_url": {"url": data_url}},
-            ]},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": args.prompt},
+                    {"type": "image_url", "image_url": {"url": data_url}},
+                ],
+            },
         ],
         "temperature": 0,
         "skip_special_tokens": False,
@@ -194,7 +204,9 @@ def request_payload(args: argparse.Namespace, data_url: str) -> dict[str, Any]:
     if args.max_tokens > 0:
         payload["max_tokens"] = args.max_tokens
     if args.ngram_size > 0 and args.ngram_window > 0:
-        payload["custom_logit_processor"] = DeepseekOCRNoRepeatNGramLogitProcessor.to_str()
+        payload["custom_logit_processor"] = (
+            DeepseekOCRNoRepeatNGramLogitProcessor.to_str()
+        )
         payload["custom_params"] = {
             "ngram_size": args.ngram_size,
             "window_size": args.ngram_window,
@@ -210,11 +222,17 @@ async def wait_for_ready(
     t0 = time.time()
     while time.time() - t0 < deadline_s:
         if serve_proc.returncode is not None:
-            raise RuntimeError(f"SGLang serve process exited before health check (rc={serve_proc.returncode})")
+            raise RuntimeError(
+                f"SGLang serve process exited before health check (rc={serve_proc.returncode})"
+            )
         try:
             resp = await client.get("/health", timeout=5)
             if resp.status_code == 200:
-                print(f"[ready] SGLang health OK after {time.time() - t0:.1f}s", file=sys.stderr, flush=True)
+                print(
+                    f"[ready] SGLang health OK after {time.time() - t0:.1f}s",
+                    file=sys.stderr,
+                    flush=True,
+                )
                 return
         except Exception:
             pass
@@ -262,26 +280,41 @@ async def launch_one_worker(args: argparse.Namespace, idx: int) -> Worker:
         timeout=httpx.Timeout(args.request_timeout),
         trust_env=False,
     )
-    await wait_for_ready(client, serve_proc, int(os.environ.get("HPC_LAUNCH_TIMEOUT_S", "1800")))
-    print(f"[orch] w{idx} ready (localhost:{endpoint.local_port})", file=sys.stderr, flush=True)
-    return Worker(idx, serve_proc, tunnel_proc, endpoint, client, args.host, args.user, args.key)
+    await wait_for_ready(
+        client, serve_proc, int(os.environ.get("HPC_LAUNCH_TIMEOUT_S", "1800"))
+    )
+    print(
+        f"[orch] w{idx} ready (localhost:{endpoint.local_port})",
+        file=sys.stderr,
+        flush=True,
+    )
+    return Worker(
+        idx, serve_proc, tunnel_proc, endpoint, client, args.host, args.user, args.key
+    )
 
 
 async def teardown_worker(worker: Worker) -> None:
     await worker.client.aclose()
-    await cancel_slurm_job(worker.ssh_host, worker.ssh_user, worker.ssh_key, worker.endpoint.slurm_job_id)
+    await cancel_slurm_job(
+        worker.ssh_host, worker.ssh_user, worker.ssh_key, worker.endpoint.slurm_job_id
+    )
     for proc in (worker.tunnel_proc, worker.serve_proc):
         try:
             proc.terminate()
         except Exception:
             pass
     await asyncio.gather(
-        *(asyncio.wait_for(proc.wait(), timeout=20) for proc in (worker.tunnel_proc, worker.serve_proc)),
+        *(
+            asyncio.wait_for(proc.wait(), timeout=20)
+            for proc in (worker.tunnel_proc, worker.serve_proc)
+        ),
         return_exceptions=True,
     )
 
 
-async def ocr_page(client: httpx.AsyncClient, args: argparse.Namespace, data_url: str) -> str:
+async def ocr_page(
+    client: httpx.AsyncClient, args: argparse.Namespace, data_url: str
+) -> str:
     resp = await client.post(
         "/v1/chat/completions",
         json=request_payload(args, data_url),
@@ -298,7 +331,7 @@ async def ocr_page(client: httpx.AsyncClient, args: argparse.Namespace, data_url
     async for raw_line in resp.aiter_lines():
         if not raw_line or not raw_line.startswith("data:"):
             continue
-        data = raw_line[len("data:"):].strip()
+        data = raw_line[len("data:") :].strip()
         if data == "[DONE]":
             break
         try:
@@ -334,9 +367,13 @@ async def ocr_pdf(
         page_texts = await asyncio.gather(
             *(ocr_page(worker.client, args, data_url) for data_url in data_urls)
         )
-        markdown = "\n\n".join(
-            f"<!-- page {idx} -->\n{text.strip()}" for idx, text in enumerate(page_texts, 1)
-        ) + "\n"
+        markdown = (
+            "\n\n".join(
+                f"<!-- page {idx} -->\n{text.strip()}"
+                for idx, text in enumerate(page_texts, 1)
+            )
+            + "\n"
+        )
         job.out_md.parent.mkdir(parents=True, exist_ok=True)
         tmp = job.out_md.with_suffix(job.out_md.suffix + ".tmp")
         tmp.write_text(markdown, encoding="utf-8")
@@ -358,7 +395,11 @@ async def main_async(args: argparse.Namespace) -> int:
     if missing:
         sys.exit(f"missing PDFs: {[str(p) for p in missing[:5]]}…")
 
-    jobs = [PdfJob(in_pdf, out_md) for in_pdf, out_md in pairs if args.force or not out_md.exists()]
+    jobs = [
+        PdfJob(in_pdf, out_md)
+        for in_pdf, out_md in pairs
+        if args.force or not out_md.exists()
+    ]
     print(
         f"[orch] {len(jobs)} PDFs to process; workers={args.workers}, "
         f"in-flight={args.in_flight} per worker; image_mode={args.image_mode}",
@@ -383,7 +424,9 @@ async def main_async(args: argparse.Namespace) -> int:
     for job in jobs:
         queue.put_nowait(job)
 
-    render_executor = concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="pdfium")
+    render_executor = concurrent.futures.ThreadPoolExecutor(
+        max_workers=1, thread_name_prefix="pdfium"
+    )
     completed: list[PdfJob] = []
     started = time.time()
 
@@ -414,7 +457,9 @@ async def main_async(args: argparse.Namespace) -> int:
         await asyncio.gather(*consumers)
     finally:
         render_executor.shutdown(wait=False)
-        await asyncio.gather(*(teardown_worker(worker) for worker in workers), return_exceptions=True)
+        await asyncio.gather(
+            *(teardown_worker(worker) for worker in workers), return_exceptions=True
+        )
 
     elapsed = time.time() - started
     n_ok = sum(1 for job in completed if job.ok)
@@ -428,12 +473,13 @@ async def main_async(args: argparse.Namespace) -> int:
     if args.report:
         args.report.parent.mkdir(parents=True, exist_ok=True)
         args.report.write_text(
-            "name\tpages\tchars\telapsed_s\tok\terror\n" +
-            "\n".join(
+            "name\tpages\tchars\telapsed_s\tok\terror\n"
+            + "\n".join(
                 f"{job.in_pdf.name}\t{job.n_pages}\t{job.n_chars}\t"
                 f"{job.elapsed_s:.2f}\t{int(job.ok)}\t{job.error or ''}"
                 for job in completed
-            ) + "\n",
+            )
+            + "\n",
             encoding="utf-8",
         )
         print(f"[orch] timing report → {args.report}", file=sys.stderr, flush=True)
@@ -441,9 +487,15 @@ async def main_async(args: argparse.Namespace) -> int:
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(description="Run Baidu Unlimited-OCR through SGLang on HPC")
-    p.add_argument("--pdf-list", type=Path, required=True,
-                   help="text file of <input_pdf> or <input_pdf>\t<output_md> per line")
+    p = argparse.ArgumentParser(
+        description="Run Baidu Unlimited-OCR through SGLang on HPC"
+    )
+    p.add_argument(
+        "--pdf-list",
+        type=Path,
+        required=True,
+        help="text file of <input_pdf> or <input_pdf>\t<output_md> per line",
+    )
     p.add_argument("--out-dir", type=Path, required=True)
     p.add_argument("--workers", type=int, default=1)
     p.add_argument("--in-flight", type=int, default=8)
@@ -453,11 +505,15 @@ def main() -> None:
     p.add_argument("--key", default=DEFAULT_KEY)
     p.add_argument("--remote-dir", default=DEFAULT_REMOTE_DIR)
     p.add_argument("--partition", default="gpunormal")
-    p.add_argument("--exclude", default="",
-                   help="Slurm node exclude list, e.g. c001 or c001,c002")
-    p.add_argument("--gres", default="gpu:a100:1",
-                   help="Slurm GPU request. Unlimited-OCR/SGLang currently needs A100 on SOM HPC; "
-                        "the current Baidu/SGLang wheel fails on RTX 8000 during the MoE request path.")
+    p.add_argument(
+        "--exclude", default="", help="Slurm node exclude list, e.g. c001 or c001,c002"
+    )
+    p.add_argument(
+        "--gres",
+        default="gpu:a100:1",
+        help="Slurm GPU request. Unlimited-OCR/SGLang currently needs A100 on SOM HPC; "
+        "the current Baidu/SGLang wheel fails on RTX 8000 during the MoE request path.",
+    )
     p.add_argument("--cpus-per-task", type=int, default=8)
     p.add_argument("--mem", default="64G")
     p.add_argument("--time", default="02:00:00")
@@ -465,27 +521,46 @@ def main() -> None:
     p.add_argument("--model", default=MODEL_ID)
     p.add_argument("--served-model-name", default=SERVED_MODEL_NAME)
     p.add_argument("--image", default=SGLANG_IMAGE)
-    p.add_argument("--uv-deps", default=DEFAULT_UV_DEPS,
-                   help="deps/wheels installed with uv inside the SGLang container before launch")
+    p.add_argument(
+        "--uv-deps",
+        default=DEFAULT_UV_DEPS,
+        help="deps/wheels installed with uv inside the SGLang container before launch",
+    )
     p.add_argument("--slurm-script", default="hpc/slurm/sglang_serve.slurm")
     p.add_argument("--context-length", type=int, default=32768)
     p.add_argument("--attention-backend", default="flashinfer")
-    p.add_argument("--disable-cuda-graph", action=argparse.BooleanOptionalAction, default=True,
-                   help="disable SGLang CUDA graph capture; default true for broader GPU compatibility.")
+    p.add_argument(
+        "--disable-cuda-graph",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="disable SGLang CUDA graph capture; default true for broader GPU compatibility.",
+    )
     p.add_argument("--page-size", type=int, default=1)
     p.add_argument("--mem-fraction-static", type=float, default=0.8)
     p.add_argument("--max-running-requests", type=int, default=16)
 
     p.add_argument("--prompt", default=DEFAULT_PROMPT)
     p.add_argument("--image-mode", choices=("gundam", "base"), default="gundam")
-    p.add_argument("--scale", type=float, default=4.0,
-                   help="pdfium render scale; 4.0 is close to the upstream 300 DPI PDF recipe")
+    p.add_argument(
+        "--scale",
+        type=float,
+        default=4.0,
+        help="pdfium render scale; 4.0 is close to the upstream 300 DPI PDF recipe",
+    )
     p.add_argument("--jpeg-quality", type=int, default=90)
-    p.add_argument("--max-tokens", type=int, default=30000,
-                   help="per-page max output tokens; must leave room for image tokens; pass 0 to omit")
-    p.add_argument("--ngram-size", type=int, default=0,
-                   help="enable custom no-repeat n-gram processor when >0. "
-                        "Default 0 because some SGLang/Python builds crash in this path.")
+    p.add_argument(
+        "--max-tokens",
+        type=int,
+        default=30000,
+        help="per-page max output tokens; must leave room for image tokens; pass 0 to omit",
+    )
+    p.add_argument(
+        "--ngram-size",
+        type=int,
+        default=0,
+        help="enable custom no-repeat n-gram processor when >0. "
+        "Default 0 because some SGLang/Python builds crash in this path.",
+    )
     p.add_argument("--ngram-window", type=int, default=128)
     p.add_argument("--request-timeout", type=int, default=1200)
 
@@ -497,7 +572,12 @@ def main() -> None:
         rc = asyncio.run(main_async(args))
     except Exception as exc:
         import traceback
-        print(f"\n[FATAL] {type(exc).__name__}: {exc}\n{traceback.format_exc()}", file=sys.stderr, flush=True)
+
+        print(
+            f"\n[FATAL] {type(exc).__name__}: {exc}\n{traceback.format_exc()}",
+            file=sys.stderr,
+            flush=True,
+        )
         rc = 2
     sys.exit(rc)
 

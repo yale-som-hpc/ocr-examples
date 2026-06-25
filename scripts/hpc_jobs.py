@@ -4,6 +4,7 @@
 This helper is intentionally conservative: cleanup only targets job names used
 by this repository's tunneled OCR service launchers.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -50,7 +51,9 @@ def ssh_base_args(ssh_key: str) -> list[str]:
     return args
 
 
-def run_ssh(args: argparse.Namespace, remote_cmd: str) -> subprocess.CompletedProcess[str]:
+def run_ssh(
+    args: argparse.Namespace, remote_cmd: str
+) -> subprocess.CompletedProcess[str]:
     cmd = [
         "ssh",
         *ssh_base_args(args.key),
@@ -127,10 +130,16 @@ def main() -> int:
     parser.add_argument("--host", default=DEFAULT_HOST)
     parser.add_argument("--user", default=DEFAULT_USER)
     parser.add_argument("--key", default=DEFAULT_KEY)
-    parser.add_argument("--ocr-only", action="store_true",
-                        help="with status, show only OCR example jobs")
-    parser.add_argument("--dry-run", action="store_true",
-                        help="with cleanup, list matching jobs without cancelling them")
+    parser.add_argument(
+        "--ocr-only",
+        action="store_true",
+        help="with status, show only OCR example jobs",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="with cleanup, list matching jobs without cancelling them",
+    )
     args = parser.parse_args()
 
     if args.command == "status":

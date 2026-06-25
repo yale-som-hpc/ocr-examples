@@ -14,6 +14,7 @@ Usage:
   just documents-process --all-local --audit                  # no work
   just documents-process --all-local --engines all --dry-run  # what would happen
 """
+
 from __future__ import annotations
 
 import argparse
@@ -26,7 +27,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Iterable
 
-GUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+GUID_RE = re.compile(
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+)
 SCRIPT_DIR = Path(__file__).resolve().parent
 
 
@@ -50,46 +53,80 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 # because the current Baidu/SGLang wheel fails on RTX 8000 during the MoE
 # request path.
 ENGINES: dict[str, dict[str, Any]] = {
-    "pypdf":    {"script": "documents_extract.py", "has_hpc": False,
-                 "ocr_slug": "pypdf"},
-    "docling":  {"script": "documents_extract.py", "has_hpc": True,
-                 "ocr_slug": "docling",
-                 "workers": 4, "in_flight": 4, "sec_per_pdf": 30,
-                 "gres": "gpu:1",
-                 # documents_extract.py uses --hpc-workers/--hpc-in-flight
-                 # prefix (different from olmocr2/deepseek/glm).
-                 "workers_flag": "--hpc-workers", "in_flight_flag": "--hpc-in-flight"},
-    "olmocr2":  {"script": "olmocr2_extract.py", "has_hpc": True,
-                 "ocr_slug": "olmocr2",
-                 "workers": 4, "in_flight": 24, "sec_per_pdf": 10,
-                 "gres": "gpu:1",
-                 "hpc_flag": "--use-hpc",
-                 "workers_flag": "--workers", "in_flight_flag": "--in-flight"},
-    "deepseek": {"script": "deepseek_ocr_extract.py", "has_hpc": True,
-                 "ocr_slug": "deepseek_ocr",
-                 "workers": 4, "in_flight": 16, "sec_per_pdf": 20,
-                 "gres": "gpu:1",
-                 "hpc_flag": "--use-hpc",
-                 "workers_flag": "--workers", "in_flight_flag": "--in-flight"},
-    "glm":      {"script": "glm_ocr_extract.py", "has_hpc": True,
-                 "ocr_slug": "glm_ocr",
-                 "workers": 4, "in_flight": 16, "sec_per_pdf": 15,
-                 "gres": "gpu:1",
-                 "hpc_flag": "--use-hpc",
-                 "workers_flag": "--workers", "in_flight_flag": "--in-flight"},
-    "unlimited_ocr": {"script": "unlimited_ocr_extract.py", "has_hpc": True,
-                 "ocr_slug": "unlimited_ocr",
-                 "workers": 2, "in_flight": 8, "sec_per_pdf": 30,
-                 "gres": "gpu:a100:1",
-                 "hpc_flag": "--use-hpc",
-                 "workers_flag": "--workers", "in_flight_flag": "--in-flight"},
+    "pypdf": {"script": "documents_extract.py", "has_hpc": False, "ocr_slug": "pypdf"},
+    "docling": {
+        "script": "documents_extract.py",
+        "has_hpc": True,
+        "ocr_slug": "docling",
+        "workers": 4,
+        "in_flight": 4,
+        "sec_per_pdf": 30,
+        "gres": "gpu:1",
+        # documents_extract.py uses --hpc-workers/--hpc-in-flight
+        # prefix (different from olmocr2/deepseek/glm).
+        "workers_flag": "--hpc-workers",
+        "in_flight_flag": "--hpc-in-flight",
+    },
+    "olmocr2": {
+        "script": "olmocr2_extract.py",
+        "has_hpc": True,
+        "ocr_slug": "olmocr2",
+        "workers": 4,
+        "in_flight": 24,
+        "sec_per_pdf": 10,
+        "gres": "gpu:1",
+        "hpc_flag": "--use-hpc",
+        "workers_flag": "--workers",
+        "in_flight_flag": "--in-flight",
+    },
+    "deepseek": {
+        "script": "deepseek_ocr_extract.py",
+        "has_hpc": True,
+        "ocr_slug": "deepseek_ocr",
+        "workers": 4,
+        "in_flight": 16,
+        "sec_per_pdf": 20,
+        "gres": "gpu:1",
+        "hpc_flag": "--use-hpc",
+        "workers_flag": "--workers",
+        "in_flight_flag": "--in-flight",
+    },
+    "glm": {
+        "script": "glm_ocr_extract.py",
+        "has_hpc": True,
+        "ocr_slug": "glm_ocr",
+        "workers": 4,
+        "in_flight": 16,
+        "sec_per_pdf": 15,
+        "gres": "gpu:1",
+        "hpc_flag": "--use-hpc",
+        "workers_flag": "--workers",
+        "in_flight_flag": "--in-flight",
+    },
+    "unlimited_ocr": {
+        "script": "unlimited_ocr_extract.py",
+        "has_hpc": True,
+        "ocr_slug": "unlimited_ocr",
+        "workers": 2,
+        "in_flight": 8,
+        "sec_per_pdf": 30,
+        "gres": "gpu:a100:1",
+        "hpc_flag": "--use-hpc",
+        "workers_flag": "--workers",
+        "in_flight_flag": "--in-flight",
+    },
 }
 ENGINE_ORDER = ["pypdf", "docling", "olmocr2", "deepseek", "glm", "unlimited_ocr"]
 
 
-def compute_hpc_time(eng: str, n_documents: int, workers: int,
-                     safety: float = 1.5,
-                     floor_min: int = 30, cap_hr: int = 24) -> str:
+def compute_hpc_time(
+    eng: str,
+    n_documents: int,
+    workers: int,
+    safety: float = 1.5,
+    floor_min: int = 30,
+    cap_hr: int = 24,
+) -> str:
     """Compute a --hpc-time bound based on the cohort size + worker count.
 
     Each Slurm worker processes ~n_documents/workers PDFs sequentially at
@@ -105,6 +142,7 @@ def compute_hpc_time(eng: str, n_documents: int, workers: int,
     total_min = max(floor_min, min(cap_hr * 60, total_min))
     h, m = divmod(total_min, 60)
     return f"{h:02d}:{m:02d}:00"
+
 
 STAGES = ["ocr"]
 
@@ -149,18 +187,22 @@ def parse_kv_pairs(s: str) -> dict[str, int]:
             continue
         k, _, v = pair.partition("=")
         if not v:
-            sys.exit(f"bad --hpc-workers/--hpc-in-flight pair: {pair!r} (expected eng=N)")
+            sys.exit(
+                f"bad --hpc-workers/--hpc-in-flight pair: {pair!r} (expected eng=N)"
+            )
         out[k.strip()] = int(v)
     return out
 
 
 # ---------- document resolution ----------
 
+
 def discover_local(documents_root: Path) -> list[str]:
     if not documents_root.exists():
         return []
     return sorted(
-        c.name for c in documents_root.iterdir()
+        c.name
+        for c in documents_root.iterdir()
         if c.is_dir() and GUID_RE.match(c.name) and (c / "document.pdf").exists()
     )
 
@@ -214,29 +256,47 @@ def resolve_documents(args: argparse.Namespace) -> list[str]:
         documents = filter_complete_only(documents, args.documents_root)
 
     # Filter to documents with document.pdf on disk.
-    on_disk = [s for s in documents if (args.documents_root / s / "document.pdf").exists()]
+    on_disk = [
+        s for s in documents if (args.documents_root / s / "document.pdf").exists()
+    ]
     n_dropped = len(set(documents)) - len(set(on_disk))
     if n_dropped:
-        print(f"note: {n_dropped} document(s) selected but missing document.pdf — skipping", flush=True)
+        print(
+            f"note: {n_dropped} document(s) selected but missing document.pdf — skipping",
+            flush=True,
+        )
     return sorted(set(on_disk))
 
 
 # ---------- audit ----------
 
+
 def audit(args: argparse.Namespace) -> int:
     documents = discover_local(args.documents_root)
-    print(f"corpus: {len(documents)} document(s) under {args.documents_root}\n", flush=True)
+    print(
+        f"corpus: {len(documents)} document(s) under {args.documents_root}\n",
+        flush=True,
+    )
     print(f"{'engine':<14}{'.txt':>10}{'.json':>10}")
     print("-" * 34)
     for eng in ENGINE_ORDER:
         slug = ENGINES[eng]["ocr_slug"]
-        n_txt = sum(1 for s in documents if (args.documents_root / s / "ocr" / f"{slug}.txt").exists())
-        n_json = sum(1 for s in documents if (args.documents_root / s / "ocr" / f"{slug}.json").exists())
+        n_txt = sum(
+            1
+            for s in documents
+            if (args.documents_root / s / "ocr" / f"{slug}.txt").exists()
+        )
+        n_json = sum(
+            1
+            for s in documents
+            if (args.documents_root / s / "ocr" / f"{slug}.json").exists()
+        )
         print(f"{eng:<14}{n_txt:>10}{n_json:>10}")
     return 0
 
 
 # ---------- subprocess + manifest ----------
+
 
 def utc_iso() -> str:
     return datetime.now(UTC).isoformat()
@@ -250,14 +310,20 @@ def run_subprocess(cmd: list[str], label: str, manifest: list[dict[str, Any]]) -
     t0 = time.time()
     result = subprocess.run(cmd, check=False)
     elapsed = round(time.time() - t0, 1)
-    manifest.append({
-        "event": "stage_end", "ts": utc_iso(), "stage": label,
-        "exit_code": result.returncode, "elapsed_s": elapsed,
-    })
+    manifest.append(
+        {
+            "event": "stage_end",
+            "ts": utc_iso(),
+            "stage": label,
+            "exit_code": result.returncode,
+            "elapsed_s": elapsed,
+        }
+    )
     return result.returncode
 
 
 # ---------- main orchestration ----------
+
 
 def main() -> int:
     p = argparse.ArgumentParser(
@@ -267,57 +333,103 @@ def main() -> int:
 
     # Document selection (one required, except for --audit)
     src = p.add_mutually_exclusive_group()
-    src.add_argument("--document", action="append", default=[],
-                     help="document_id GUID (repeatable)")
-    src.add_argument("--all-local", action="store_true",
-                     help="every PDF already under --documents-root")
-    src.add_argument("--from-file", type=Path,
-                     help="text file with one GUID per line (# comments ok)")
-    p.add_argument("--complete-only", action="store_true",
-                   help="filter to documents marked complete_only:true in .manifest.jsonl "
-                        "(only meaningful for SFTP-tracked documents)")
-    p.add_argument("--limit", type=int, default=None,
-                   help="cap the resolved document list to the first N (deterministic — "
-                        "post-sort). Useful for preflight / sanity runs.")
+    src.add_argument(
+        "--document", action="append", default=[], help="document_id GUID (repeatable)"
+    )
+    src.add_argument(
+        "--all-local",
+        action="store_true",
+        help="every PDF already under --documents-root",
+    )
+    src.add_argument(
+        "--from-file",
+        type=Path,
+        help="text file with one GUID per line (# comments ok)",
+    )
+    p.add_argument(
+        "--complete-only",
+        action="store_true",
+        help="filter to documents marked complete_only:true in .manifest.jsonl "
+        "(only meaningful for SFTP-tracked documents)",
+    )
+    p.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="cap the resolved document list to the first N (deterministic — "
+        "post-sort). Useful for preflight / sanity runs.",
+    )
 
     # Engines + stages
-    p.add_argument("--engines", default=None,
-                   help=f"REQUIRED (except --audit). Comma-separated subset of "
-                        f"{ENGINE_ORDER}, or 'all'.")
-    p.add_argument("--stages", default="all",
-                   help=f"comma-separated subset of {STAGES}, or 'all'.")
+    p.add_argument(
+        "--engines",
+        default=None,
+        help=f"REQUIRED (except --audit). Comma-separated subset of "
+        f"{ENGINE_ORDER}, or 'all'.",
+    )
+    p.add_argument(
+        "--stages", default="all", help=f"comma-separated subset of {STAGES}, or 'all'."
+    )
 
     # HPC routing
-    p.add_argument("--use-hpc", action="store_true",
-                   help="enable HPC backends for every selected engine that has one. "
-                        "pypdf is local-only; docling/olmocr2/deepseek/glm/unlimited_ocr get HPC.")
-    p.add_argument("--no-hpc-for", default="",
-                   help="comma-separated engines to keep local even when --use-hpc")
+    p.add_argument(
+        "--use-hpc",
+        action="store_true",
+        help="enable HPC backends for every selected engine that has one. "
+        "pypdf is local-only; docling/olmocr2/deepseek/glm/unlimited_ocr get HPC.",
+    )
+    p.add_argument(
+        "--no-hpc-for",
+        default="",
+        help="comma-separated engines to keep local even when --use-hpc",
+    )
 
     # Modes
-    p.add_argument("--strict", action="store_true",
-                   help="exit on first stage failure (default: continue, summarize at end)")
-    p.add_argument("--dry-run", action="store_true",
-                   help="resolve documents + print plan, then exit. No work.")
-    p.add_argument("--audit", action="store_true",
-                   help="walk corpus, print coverage by engine + stage, exit. No work.")
+    p.add_argument(
+        "--strict",
+        action="store_true",
+        help="exit on first stage failure (default: continue, summarize at end)",
+    )
+    p.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="resolve documents + print plan, then exit. No work.",
+    )
+    p.add_argument(
+        "--audit",
+        action="store_true",
+        help="walk corpus, print coverage by engine + stage, exit. No work.",
+    )
 
     # HPC OCR tuning (per-engine overrides; defaults in the ENGINES table)
-    p.add_argument("--hpc-workers", default="",
-                   help="per-engine workers override, e.g. olmocr2=8,deepseek=4. "
-                        f"Defaults: " + ", ".join(
-                            f"{e}={ENGINES[e]['workers']}" for e in ENGINE_ORDER
-                            if ENGINES[e].get("has_hpc")))
-    p.add_argument("--hpc-in-flight", default="",
-                   help="per-engine in-flight override, e.g. olmocr2=32,deepseek=24. "
-                        f"Defaults: " + ", ".join(
-                            f"{e}={ENGINES[e]['in_flight']}" for e in ENGINE_ORDER
-                            if ENGINES[e].get("has_hpc")))
+    p.add_argument(
+        "--hpc-workers",
+        default="",
+        help="per-engine workers override, e.g. olmocr2=8,deepseek=4. "
+        "Defaults: "
+        + ", ".join(
+            f"{e}={ENGINES[e]['workers']}"
+            for e in ENGINE_ORDER
+            if ENGINES[e].get("has_hpc")
+        ),
+    )
+    p.add_argument(
+        "--hpc-in-flight",
+        default="",
+        help="per-engine in-flight override, e.g. olmocr2=32,deepseek=24. "
+        "Defaults: "
+        + ", ".join(
+            f"{e}={ENGINES[e]['in_flight']}"
+            for e in ENGINE_ORDER
+            if ENGINES[e].get("has_hpc")
+        ),
+    )
 
     # Filesystem roots
     p.add_argument("--documents-root", type=Path, default=Path("data/documents"))
-    p.add_argument("--force", action="store_true",
-                   help="re-run each stage even if outputs exist")
+    p.add_argument(
+        "--force", action="store_true", help="re-run each stage even if outputs exist"
+    )
 
     args = p.parse_args()
 
@@ -327,8 +439,10 @@ def main() -> int:
 
     # Validate source + engines
     if not (args.document or args.all_local or args.from_file):
-        sys.exit("must specify a document source: --document / --all-local / "
-                 "--from-file (or use --audit)")
+        sys.exit(
+            "must specify a document source: --document / --all-local / "
+            "--from-file (or use --audit)"
+        )
     if not args.engines:
         sys.exit("must specify --engines (e.g. pypdf,olmocr2 or all)")
 
@@ -345,10 +459,16 @@ def main() -> int:
     if args.limit is not None and args.limit > 0 and len(documents) > args.limit:
         n_dropped = len(documents) - args.limit
         documents = documents[: args.limit]
-        print(f"--limit {args.limit}: keeping first {args.limit}, dropping {n_dropped}", flush=True)
+        print(
+            f"--limit {args.limit}: keeping first {args.limit}, dropping {n_dropped}",
+            flush=True,
+        )
 
-    hpc_engines = [e for e in engines
-                   if args.use_hpc and ENGINES[e].get("has_hpc") and e not in no_hpc]
+    hpc_engines = [
+        e
+        for e in engines
+        if args.use_hpc and ENGINES[e].get("has_hpc") and e not in no_hpc
+    ]
 
     print(f"documents: {len(documents)}", flush=True)
     print(f"engines: {','.join(engines)}", flush=True)
@@ -369,22 +489,26 @@ def main() -> int:
     manifest: list[dict[str, Any]] = []
 
     serializable_args = {
-        k: (str(v) if isinstance(v, Path) else v)
-        for k, v in vars(args).items()
+        k: (str(v) if isinstance(v, Path) else v) for k, v in vars(args).items()
     }
-    manifest.append({
-        "event": "run_start", "ts": utc_iso(),
-        "n_documents": len(documents),
-        "engines": engines, "stages": stages,
-        "hpc_engines": hpc_engines,
-        "args": serializable_args,
-    })
+    manifest.append(
+        {
+            "event": "run_start",
+            "ts": utc_iso(),
+            "n_documents": len(documents),
+            "engines": engines,
+            "stages": stages,
+            "hpc_engines": hpc_engines,
+            "args": serializable_args,
+        }
+    )
 
     failures: list[str] = []
     common_document_args: list[str] = []
     for s in documents:
         common_document_args += ["--document", s]
     force_args = ["--force"] if args.force else []
+
     def fail_or_continue(label: str, rc: int) -> bool:
         """Record failure; return True if we should keep going."""
         if rc == 0:
@@ -407,18 +531,31 @@ def main() -> int:
                 workers = workers_override.get("docling", e["workers"])
                 in_flight = in_flight_override.get("docling", e["in_flight"])
                 extra += [
-                    e["workers_flag"], str(workers),
-                    e["in_flight_flag"], str(in_flight),
-                    "--hpc-gres", e["gres"],
-                    "--hpc-time", compute_hpc_time("docling", len(documents), workers),
+                    e["workers_flag"],
+                    str(workers),
+                    e["in_flight_flag"],
+                    str(in_flight),
+                    "--hpc-gres",
+                    e["gres"],
+                    "--hpc-time",
+                    compute_hpc_time("docling", len(documents), workers),
                 ]
-            cmd = [
-                "uv", "run", "--script", str(SCRIPT_DIR / ENGINES["pypdf"]["script"]),
-            ] + common_document_args + extra
+            cmd = (
+                [
+                    "uv",
+                    "run",
+                    "--script",
+                    str(SCRIPT_DIR / ENGINES["pypdf"]["script"]),
+                ]
+                + common_document_args
+                + extra
+            )
             label = "ocr:" + ("+".join(e for e in ("pypdf", "docling") if e in engines))
             rc = run_subprocess(cmd, label, manifest)
             if not fail_or_continue(label, rc):
-                return _finalize_and_exit(manifest_path, manifest, failures, documents, args, rc)
+                return _finalize_and_exit(
+                    manifest_path, manifest, failures, documents, args, rc
+                )
 
         # One subprocess per served OCR engine.
         for eng in ("olmocr2", "deepseek", "glm", "unlimited_ocr"):
@@ -431,35 +568,63 @@ def main() -> int:
                 workers = workers_override.get(eng, e["workers"])
                 in_flight = in_flight_override.get(eng, e["in_flight"])
                 extra += [
-                    e["workers_flag"], str(workers),
-                    e["in_flight_flag"], str(in_flight),
-                    "--hpc-gres", e["gres"],
-                    "--hpc-time", compute_hpc_time(eng, len(documents), workers),
+                    e["workers_flag"],
+                    str(workers),
+                    e["in_flight_flag"],
+                    str(in_flight),
+                    "--hpc-gres",
+                    e["gres"],
+                    "--hpc-time",
+                    compute_hpc_time(eng, len(documents), workers),
                 ]
-            cmd = [
-                "uv", "run", "--script", str(SCRIPT_DIR / e["script"]),
-            ] + common_document_args + extra
+            cmd = (
+                [
+                    "uv",
+                    "run",
+                    "--script",
+                    str(SCRIPT_DIR / e["script"]),
+                ]
+                + common_document_args
+                + extra
+            )
             rc = run_subprocess(cmd, f"ocr:{eng}", manifest)
             if not fail_or_continue(f"ocr:{eng}", rc):
-                return _finalize_and_exit(manifest_path, manifest, failures, documents, args, rc)
+                return _finalize_and_exit(
+                    manifest_path, manifest, failures, documents, args, rc
+                )
 
-    return _finalize_and_exit(manifest_path, manifest, failures, documents, args,
-                              1 if failures else 0)
+    return _finalize_and_exit(
+        manifest_path, manifest, failures, documents, args, 1 if failures else 0
+    )
 
 
-def _finalize_and_exit(manifest_path: Path, manifest: list[dict[str, Any]],
-                       failures: list[str], documents: list[str],
-                       args: argparse.Namespace, rc: int) -> int:
+def _finalize_and_exit(
+    manifest_path: Path,
+    manifest: list[dict[str, Any]],
+    failures: list[str],
+    documents: list[str],
+    args: argparse.Namespace,
+    rc: int,
+) -> int:
     # Compute coverage on the run's documents
     per_engine = {
-        eng: sum(1 for s in documents if (args.documents_root / s / "ocr" / f"{ENGINES[eng]['ocr_slug']}.txt").exists())
+        eng: sum(
+            1
+            for s in documents
+            if (
+                args.documents_root / s / "ocr" / f"{ENGINES[eng]['ocr_slug']}.txt"
+            ).exists()
+        )
         for eng in ENGINE_ORDER
     }
-    manifest.append({
-        "event": "run_end", "ts": utc_iso(),
-        "failures": failures,
-        "coverage_on_run_documents": {"per_engine": per_engine},
-    })
+    manifest.append(
+        {
+            "event": "run_end",
+            "ts": utc_iso(),
+            "failures": failures,
+            "coverage_on_run_documents": {"per_engine": per_engine},
+        }
+    )
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     with manifest_path.open("w") as fh:
         for line in manifest:

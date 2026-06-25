@@ -12,6 +12,7 @@ sidecars on the trusted local client.
 No local backend is provided because the upstream direct path requires NVIDIA
 CUDA. Use --use-hpc.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -46,17 +47,25 @@ GUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]
 def resolve_documents(args: argparse.Namespace) -> list[str]:
     documents = list(args.document)
     if args.from_file:
-        documents += [line.strip() for line in args.from_file.read_text().splitlines() if line.strip()]
+        documents += [
+            line.strip()
+            for line in args.from_file.read_text().splitlines()
+            if line.strip()
+        ]
     if args.all_local and args.documents_root.exists():
         documents += [
             child.name
             for child in args.documents_root.iterdir()
-            if child.is_dir() and GUID_RE.match(child.name) and (child / "document.pdf").exists()
+            if child.is_dir()
+            and GUID_RE.match(child.name)
+            and (child / "document.pdf").exists()
         ]
     return sorted({s.lower() for s in documents if GUID_RE.match(s)})
 
 
-def gate_text_native(documents: list[str], documents_root: Path, include_text_native: bool) -> list[str]:
+def gate_text_native(
+    documents: list[str], documents_root: Path, include_text_native: bool
+) -> list[str]:
     if include_text_native:
         return documents
     filtered: list[str] = []
@@ -75,7 +84,9 @@ def gate_text_native(documents: list[str], documents_root: Path, include_text_na
     return filtered
 
 
-def collect_jobs(args: argparse.Namespace, documents: list[str]) -> list[tuple[str, Path, Path]]:
+def collect_jobs(
+    args: argparse.Namespace, documents: list[str]
+) -> list[tuple[str, Path, Path]]:
     jobs: list[tuple[str, Path, Path]] = []
     for document in documents:
         document_dir = args.documents_root / document
@@ -93,41 +104,70 @@ def collect_jobs(args: argparse.Namespace, documents: list[str]) -> list[tuple[s
 
 
 def run_hpc(args: argparse.Namespace, jobs: list[tuple[str, Path, Path]]) -> int:
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".tsv", delete=False, encoding="utf-8") as fh:
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".tsv", delete=False, encoding="utf-8"
+    ) as fh:
         tsv_path = Path(fh.name)
         for _, pdf_path, txt_path in jobs:
             fh.write(f"{pdf_path}\t{txt_path}\n")
     scratch_dir = Path(tempfile.mkdtemp(prefix="unlimited_ocr_hpc_"))
 
     cmd = [
-        "uv", "run",
-        "--with", "openai>=1.40",
-        "--with", "httpx>=0.27",
-        "--with", "pypdfium2>=4.30",
-        "--with", "pillow>=11",
-        "--with", "dill>=0.3.8",
+        "uv",
+        "run",
+        "--with",
+        "openai>=1.40",
+        "--with",
+        "httpx>=0.27",
+        "--with",
+        "pypdfium2>=4.30",
+        "--with",
+        "pillow>=11",
+        "--with",
+        "dill>=0.3.8",
         args.hpc_client,
-        "--pdf-list", str(tsv_path),
-        "--out-dir", str(scratch_dir),
-        "--workers", str(args.workers),
-        "--in-flight", str(args.in_flight),
-        "--gres", args.hpc_gres,
-        "--mem", args.hpc_mem,
-        "--cpus-per-task", str(args.hpc_cpus),
-        "--time", args.hpc_time,
-        "--model", args.hpc_model,
-        "--served-model-name", SERVED_MODEL_NAME,
-        "--image", args.hpc_image,
-        "--uv-deps", args.hpc_uv_deps,
-        "--context-length", str(args.context_length),
-        "--attention-backend", args.attention_backend,
-        "--max-tokens", str(args.max_tokens),
-        "--image-mode", args.image_mode,
-        "--scale", str(args.scale),
-        "--jpeg-quality", str(args.jpeg_quality),
-        "--ngram-size", str(args.ngram_size),
-        "--ngram-window", str(args.ngram_window),
-        "--request-timeout", str(args.request_timeout),
+        "--pdf-list",
+        str(tsv_path),
+        "--out-dir",
+        str(scratch_dir),
+        "--workers",
+        str(args.workers),
+        "--in-flight",
+        str(args.in_flight),
+        "--gres",
+        args.hpc_gres,
+        "--mem",
+        args.hpc_mem,
+        "--cpus-per-task",
+        str(args.hpc_cpus),
+        "--time",
+        args.hpc_time,
+        "--model",
+        args.hpc_model,
+        "--served-model-name",
+        SERVED_MODEL_NAME,
+        "--image",
+        args.hpc_image,
+        "--uv-deps",
+        args.hpc_uv_deps,
+        "--context-length",
+        str(args.context_length),
+        "--attention-backend",
+        args.attention_backend,
+        "--max-tokens",
+        str(args.max_tokens),
+        "--image-mode",
+        args.image_mode,
+        "--scale",
+        str(args.scale),
+        "--jpeg-quality",
+        str(args.jpeg_quality),
+        "--ngram-size",
+        str(args.ngram_size),
+        "--ngram-window",
+        str(args.ngram_window),
+        "--request-timeout",
+        str(args.request_timeout),
     ]
     if args.hpc_exclude:
         cmd.extend(["--exclude", args.hpc_exclude])
@@ -160,40 +200,68 @@ def main() -> None:
     p.add_argument("--all-local", action="store_true")
     p.add_argument("--documents-root", type=Path, default=Path("data/documents"))
     p.add_argument("--force", action="store_true")
-    p.add_argument("--include-text-native", action="store_true",
-                   help="Also run Unlimited-OCR on documents where pypdf already produced clean text.")
+    p.add_argument(
+        "--include-text-native",
+        action="store_true",
+        help="Also run Unlimited-OCR on documents where pypdf already produced clean text.",
+    )
 
-    p.add_argument("--use-hpc", action="store_true", help="required; run through SGLang on HPC")
+    p.add_argument(
+        "--use-hpc", action="store_true", help="required; run through SGLang on HPC"
+    )
     p.add_argument("--workers", type=int, default=2)
     p.add_argument("--in-flight", type=int, default=8)
-    p.add_argument("--hpc-client",
-                   default=str(Path(__file__).resolve().parent.parent / "hpc/client/unlimited_ocr_client.py"))
-    p.add_argument("--hpc-gres", default="gpu:a100:1",
-                   help="Slurm GPU request. Unlimited-OCR/SGLang currently needs A100 on SOM HPC; "
-                        "the current Baidu/SGLang wheel fails on RTX 8000 during the MoE request path.")
-    p.add_argument("--hpc-exclude", default="",
-                   help="Slurm node exclude list, e.g. c001")
-    p.add_argument("--hpc-mem", default="64G",
-                   help="Slurm memory request per worker")
-    p.add_argument("--hpc-cpus", type=int, default=8,
-                   help="Slurm CPU request per worker")
+    p.add_argument(
+        "--hpc-client",
+        default=str(
+            Path(__file__).resolve().parent.parent
+            / "hpc/client/unlimited_ocr_client.py"
+        ),
+    )
+    p.add_argument(
+        "--hpc-gres",
+        default="gpu:a100:1",
+        help="Slurm GPU request. Unlimited-OCR/SGLang currently needs A100 on SOM HPC; "
+        "the current Baidu/SGLang wheel fails on RTX 8000 during the MoE request path.",
+    )
+    p.add_argument(
+        "--hpc-exclude", default="", help="Slurm node exclude list, e.g. c001"
+    )
+    p.add_argument("--hpc-mem", default="64G", help="Slurm memory request per worker")
+    p.add_argument(
+        "--hpc-cpus", type=int, default=8, help="Slurm CPU request per worker"
+    )
     p.add_argument("--hpc-time", default="02:00:00")
     p.add_argument("--hpc-model", default=HPC_MODEL)
     p.add_argument("--hpc-image", default=HPC_IMAGE)
-    p.add_argument("--hpc-uv-deps", default=DEFAULT_UV_DEPS,
-                   help="deps/wheels installed with uv inside the SGLang container before launch")
-    p.add_argument("--attention-backend", default="flashinfer",
-                   help="SGLang attention backend. fa3 requires SM80+; flashinfer is the portable default.")
-    p.add_argument("--disable-cuda-graph", action=argparse.BooleanOptionalAction, default=True,
-                   help="disable SGLang CUDA graph capture; default true for broader GPU compatibility.")
+    p.add_argument(
+        "--hpc-uv-deps",
+        default=DEFAULT_UV_DEPS,
+        help="deps/wheels installed with uv inside the SGLang container before launch",
+    )
+    p.add_argument(
+        "--attention-backend",
+        default="flashinfer",
+        help="SGLang attention backend. fa3 requires SM80+; flashinfer is the portable default.",
+    )
+    p.add_argument(
+        "--disable-cuda-graph",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="disable SGLang CUDA graph capture; default true for broader GPU compatibility.",
+    )
     p.add_argument("--context-length", type=int, default=32768)
     p.add_argument("--max-tokens", type=int, default=30000)
     p.add_argument("--image-mode", choices=("gundam", "base"), default="gundam")
     p.add_argument("--scale", type=float, default=4.0)
     p.add_argument("--jpeg-quality", type=int, default=90)
-    p.add_argument("--ngram-size", type=int, default=0,
-                   help="enable custom no-repeat n-gram processor when >0. "
-                        "Default 0 because some SGLang/Python builds crash in this path.")
+    p.add_argument(
+        "--ngram-size",
+        type=int,
+        default=0,
+        help="enable custom no-repeat n-gram processor when >0. "
+        "Default 0 because some SGLang/Python builds crash in this path.",
+    )
     p.add_argument("--ngram-window", type=int, default=128)
     p.add_argument("--request-timeout", type=int, default=1200)
     args = p.parse_args()
@@ -204,7 +272,9 @@ def main() -> None:
     documents = resolve_documents(args)
     if not documents:
         sys.exit("no valid document GUIDs supplied")
-    documents = gate_text_native(documents, args.documents_root, args.include_text_native)
+    documents = gate_text_native(
+        documents, args.documents_root, args.include_text_native
+    )
     if not documents:
         print("no documents left to process after gating; done", flush=True)
         return
@@ -255,7 +325,9 @@ def main() -> None:
             },
         )
         written += 1
-    print(f"\nHPC backend rc={rc}; wrote {written}/{len(jobs)} (.txt + .json)", flush=True)
+    print(
+        f"\nHPC backend rc={rc}; wrote {written}/{len(jobs)} (.txt + .json)", flush=True
+    )
     sys.exit(0 if rc == 0 else rc)
 
 

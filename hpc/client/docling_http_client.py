@@ -25,6 +25,7 @@ discovery marker parsing, multi-worker orchestration, TSV pdf-list); the only
 real difference is the request shape (multipart PDF vs base64 page images) and
 the response parsing (JSON document.md_content vs OpenAI chat completion).
 """
+
 from __future__ import annotations
 import argparse
 import asyncio
@@ -61,6 +62,7 @@ def ssh_base_args(ssh_key: str) -> list[str]:
 
 # ---- SSH plumbing ----
 
+
 @dataclass
 class ServerEndpoint:
     compute_host: str
@@ -71,8 +73,15 @@ class ServerEndpoint:
 
 
 async def launch_docling_serve(
-    ssh_host: str, ssh_user: str, ssh_key: str, remote_dir: str,
-    partition: str, gres: str, cpus_per_task: int, mem: str, time_str: str,
+    ssh_host: str,
+    ssh_user: str,
+    ssh_key: str,
+    remote_dir: str,
+    partition: str,
+    gres: str,
+    cpus_per_task: int,
+    mem: str,
+    time_str: str,
     job_name: str,
     exclude: str | None = None,
 ) -> tuple[asyncio.subprocess.Process, ServerEndpoint]:
@@ -90,14 +99,21 @@ async def launch_docling_serve(
         f"bash hpc/slurm/docling_serve.slurm"
     )
     cmd = [
-        "ssh", *ssh_base_args(ssh_key), "-T",
-        "-o", "ServerAliveInterval=30",
-        "-o", "ServerAliveCountMax=3",
-        "-o", "BatchMode=yes",
+        "ssh",
+        *ssh_base_args(ssh_key),
+        "-T",
+        "-o",
+        "ServerAliveInterval=30",
+        "-o",
+        "ServerAliveCountMax=3",
+        "-o",
+        "BatchMode=yes",
         ssh_target(ssh_user, ssh_host),
         remote_cmd,
     ]
-    print(f"[serve] launching: ssh ... '{remote_cmd[:120]}…'", file=sys.stderr, flush=True)
+    print(
+        f"[serve] launching: ssh ... '{remote_cmd[:120]}…'", file=sys.stderr, flush=True
+    )
 
     proc = await asyncio.create_subprocess_exec(
         *cmd,
@@ -117,7 +133,9 @@ async def launch_docling_serve(
             line_bytes = await asyncio.wait_for(proc.stderr.readline(), timeout=10)
         except asyncio.TimeoutError:
             if proc.returncode is not None:
-                raise RuntimeError(f"ssh exited with rc={proc.returncode} before LISTEN")
+                raise RuntimeError(
+                    f"ssh exited with rc={proc.returncode} before LISTEN"
+                )
             continue
         if not line_bytes:
             raise RuntimeError("ssh stderr closed before LISTEN marker")
@@ -158,9 +176,13 @@ async def launch_docling_serve(
 
 
 async def open_tunnel(
-    ssh_host: str, ssh_user: str, ssh_key: str, endpoint: ServerEndpoint,
+    ssh_host: str,
+    ssh_user: str,
+    ssh_key: str,
+    endpoint: ServerEndpoint,
 ) -> asyncio.subprocess.Process:
     import socket
+
     s = socket.socket()
     s.bind(("127.0.0.1", 0))
     local_port = s.getsockname()[1]
@@ -168,16 +190,23 @@ async def open_tunnel(
     endpoint.local_port = local_port
 
     cmd = [
-        "ssh", *ssh_base_args(ssh_key), "-N",
-        "-o", "ExitOnForwardFailure=yes",
-        "-o", "ServerAliveInterval=30",
-        "-o", "ServerAliveCountMax=3",
-        "-L", f"localhost:{local_port}:{endpoint.compute_host}:{endpoint.compute_port}",
+        "ssh",
+        *ssh_base_args(ssh_key),
+        "-N",
+        "-o",
+        "ExitOnForwardFailure=yes",
+        "-o",
+        "ServerAliveInterval=30",
+        "-o",
+        "ServerAliveCountMax=3",
+        "-L",
+        f"localhost:{local_port}:{endpoint.compute_host}:{endpoint.compute_port}",
         ssh_target(ssh_user, ssh_host),
     ]
     print(
         f"[tunnel] localhost:{local_port} -> {endpoint.compute_host}:{endpoint.compute_port}",
-        file=sys.stderr, flush=True,
+        file=sys.stderr,
+        flush=True,
     )
     proc = await asyncio.create_subprocess_exec(
         *cmd,
@@ -201,8 +230,11 @@ async def open_tunnel(
                     return
                 if any(p in line for p in NOISE_PATTERNS):
                     continue
-                print(f"[tunnel] {line.decode('utf-8', 'replace').rstrip()}",
-                      file=sys.stderr, flush=True)
+                print(
+                    f"[tunnel] {line.decode('utf-8', 'replace').rstrip()}",
+                    file=sys.stderr,
+                    flush=True,
+                )
         except Exception:
             pass
 
@@ -211,6 +243,7 @@ async def open_tunnel(
 
 
 # ---- HTTP request ----
+
 
 async def wait_for_ready(client: httpx.AsyncClient, deadline_s: float) -> None:
     """Poll /health until docling-serve responds 2xx. The model load happens
@@ -223,8 +256,12 @@ async def wait_for_ready(client: httpx.AsyncClient, deadline_s: float) -> None:
             r = await client.get("/health")
             if r.status_code < 500:
                 elapsed = time.time() - t0
-                print(f"[ready] docling-serve responding after {elapsed:.1f}s "
-                      f"(status={r.status_code})", file=sys.stderr, flush=True)
+                print(
+                    f"[ready] docling-serve responding after {elapsed:.1f}s "
+                    f"(status={r.status_code})",
+                    file=sys.stderr,
+                    flush=True,
+                )
                 return
         except Exception:
             pass
@@ -279,6 +316,7 @@ async def convert_pdf(client: httpx.AsyncClient, job: PdfJob) -> PdfJob:
 
 # ---- multi-worker orchestration ----
 
+
 @dataclass
 class Worker:
     idx: int
@@ -294,10 +332,15 @@ class Worker:
 async def launch_one_worker(args: argparse.Namespace, idx: int) -> Worker:
     print(f"[orch] launching worker w{idx}…", file=sys.stderr, flush=True)
     serve_proc, endpoint = await launch_docling_serve(
-        ssh_host=args.host, ssh_user=args.user, ssh_key=args.key,
+        ssh_host=args.host,
+        ssh_user=args.user,
+        ssh_key=args.key,
         remote_dir=args.remote_dir,
-        partition=args.partition, gres=args.gres,
-        cpus_per_task=args.cpus_per_task, mem=args.mem, time_str=args.time,
+        partition=args.partition,
+        gres=args.gres,
+        cpus_per_task=args.cpus_per_task,
+        mem=args.mem,
+        time_str=args.time,
         job_name=f"docling-serve-w{idx}-{os.getpid()}",
         exclude=args.exclude,
     )
@@ -309,26 +352,40 @@ async def launch_one_worker(args: argparse.Namespace, idx: int) -> Worker:
         # connect: cheap; read: docling can take 30-60s on big scans; pool: small.
         timeout=httpx.Timeout(connect=15.0, read=600.0, write=60.0, pool=10.0),
         # one HTTP connection per in-flight request, capped at args.in_flight.
-        limits=httpx.Limits(max_keepalive_connections=args.in_flight,
-                            max_connections=args.in_flight),
+        limits=httpx.Limits(
+            max_keepalive_connections=args.in_flight, max_connections=args.in_flight
+        ),
     )
     await wait_for_ready(client, deadline_s=600)
-    print(f"[orch] w{idx} ready (port {endpoint.local_port} → {endpoint.compute_host}:{endpoint.compute_port})",
-          file=sys.stderr, flush=True)
+    print(
+        f"[orch] w{idx} ready (port {endpoint.local_port} → {endpoint.compute_host}:{endpoint.compute_port})",
+        file=sys.stderr,
+        flush=True,
+    )
     return Worker(
-        idx=idx, serve_proc=serve_proc, tunnel_proc=tunnel_proc,
-        client=client, endpoint=endpoint,
-        ssh_host=args.host, ssh_user=args.user, ssh_key=args.key,
+        idx=idx,
+        serve_proc=serve_proc,
+        tunnel_proc=tunnel_proc,
+        client=client,
+        endpoint=endpoint,
+        ssh_host=args.host,
+        ssh_user=args.user,
+        ssh_key=args.key,
     )
 
 
-async def cancel_slurm_job(ssh_host: str, ssh_user: str, ssh_key: str, job_id: str | None) -> None:
+async def cancel_slurm_job(
+    ssh_host: str, ssh_user: str, ssh_key: str, job_id: str | None
+) -> None:
     """Best-effort cleanup for ssh-driven srun jobs."""
     if not job_id or not re.match(r"^[0-9]+$", job_id):
         return
     cmd = [
-        "ssh", *ssh_base_args(ssh_key), "-T",
-        "-o", "BatchMode=yes",
+        "ssh",
+        *ssh_base_args(ssh_key),
+        "-T",
+        "-o",
+        "BatchMode=yes",
         ssh_target(ssh_user, ssh_host),
         f"scancel {shlex.quote(job_id)}",
     ]
@@ -342,9 +399,17 @@ async def cancel_slurm_job(ssh_host: str, ssh_user: str, ssh_key: str, job_id: s
         _, stderr = await asyncio.wait_for(proc.communicate(), timeout=15)
         if proc.returncode not in (0, None):
             msg = (stderr or b"").decode("utf-8", "replace").strip()
-            print(f"[orch] scancel {job_id} rc={proc.returncode}: {msg}", file=sys.stderr, flush=True)
+            print(
+                f"[orch] scancel {job_id} rc={proc.returncode}: {msg}",
+                file=sys.stderr,
+                flush=True,
+            )
     except Exception as exc:
-        print(f"[orch] scancel {job_id} failed: {type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
+        print(
+            f"[orch] scancel {job_id} failed: {type(exc).__name__}: {exc}",
+            file=sys.stderr,
+            flush=True,
+        )
 
 
 async def teardown_worker(w: Worker) -> None:
@@ -359,7 +424,10 @@ async def teardown_worker(w: Worker) -> None:
         except Exception:
             pass
     await asyncio.gather(
-        *(asyncio.wait_for(p.wait(), timeout=20) for p in (w.tunnel_proc, w.serve_proc)),
+        *(
+            asyncio.wait_for(p.wait(), timeout=20)
+            for p in (w.tunnel_proc, w.serve_proc)
+        ),
         return_exceptions=True,
     )
 
@@ -404,7 +472,8 @@ async def main_async(args: argparse.Namespace) -> int:
         f"[orch] {len(jobs)} PDFs to process; "
         f"workers={args.workers}, in-flight={args.in_flight} per worker "
         f"(total concurrent: {args.workers * args.in_flight})",
-        file=sys.stderr, flush=True,
+        file=sys.stderr,
+        flush=True,
     )
     if not jobs:
         return 0
@@ -424,7 +493,8 @@ async def main_async(args: argparse.Namespace) -> int:
     if bad:
         print(
             f"[orch] proceeding with {len(live)}/{args.workers} worker(s)",
-            file=sys.stderr, flush=True,
+            file=sys.stderr,
+            flush=True,
         )
     workers = live
 
@@ -448,7 +518,8 @@ async def main_async(args: argparse.Namespace) -> int:
                 f"[done] w{w.idx} {j.in_pdf.name} → {j.out_md.name}  "
                 f"({j.n_chars}B, {j.elapsed_s:.1f}s, srv={j.server_processing_s}, {status}; "
                 f"{len(completed)}/{len(jobs)})",
-                file=sys.stderr, flush=True,
+                file=sys.stderr,
+                flush=True,
             )
             queue.task_done()
 
@@ -464,21 +535,23 @@ async def main_async(args: argparse.Namespace) -> int:
         n_err = sum(1 for j in completed if not j.ok)
         print(
             f"\n=== SUMMARY === {n_ok} ok / {n_err} err in {total:.1f}s "
-            f"({n_ok/total*60:.1f} PDFs/min, "
+            f"({n_ok / total * 60:.1f} PDFs/min, "
             f"{args.workers} worker(s) × {args.in_flight} in-flight)",
-            file=sys.stderr, flush=True,
+            file=sys.stderr,
+            flush=True,
         )
 
         if args.report:
             args.report.parent.mkdir(parents=True, exist_ok=True)
             args.report.write_text(
-                "name\tchars\telapsed_s\tserver_s\tok\terror\n" +
-                "\n".join(
+                "name\tchars\telapsed_s\tserver_s\tok\terror\n"
+                + "\n".join(
                     f"{j.in_pdf.name}\t{j.n_chars}\t"
                     f"{j.elapsed_s:.2f}\t{j.server_processing_s or ''}\t"
                     f"{int(j.ok)}\t{j.error or ''}"
                     for j in completed
-                ) + "\n"
+                )
+                + "\n"
             )
             print(f"[orch] timing report → {args.report}", file=sys.stderr)
     finally:
@@ -495,10 +568,11 @@ async def main_async_safe(args: argparse.Namespace) -> int:
         return await main_async(args)
     except Exception as exc:
         import traceback
+
         print(
-            f"\n[FATAL] {type(exc).__name__}: {exc}\n"
-            + traceback.format_exc(),
-            file=sys.stderr, flush=True,
+            f"\n[FATAL] {type(exc).__name__}: {exc}\n" + traceback.format_exc(),
+            file=sys.stderr,
+            flush=True,
         )
         return 2
 
@@ -507,12 +581,20 @@ def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--pdf-list", type=Path, required=True)
     p.add_argument("--out-dir", type=Path, required=True)
-    p.add_argument("--workers", type=int, default=1,
-                   help="number of parallel Slurm jobs (one docling-serve per GPU)")
-    p.add_argument("--in-flight", type=int, default=4,
-                   help="max concurrent PDFs in flight PER WORKER. docling-serve does "
-                        "its own internal queueing (DOCLING_SERVE_ENG_LOC_NUM_WORKERS); "
-                        "pushing more in-flight than that just queues at the server.")
+    p.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        help="number of parallel Slurm jobs (one docling-serve per GPU)",
+    )
+    p.add_argument(
+        "--in-flight",
+        type=int,
+        default=4,
+        help="max concurrent PDFs in flight PER WORKER. docling-serve does "
+        "its own internal queueing (DOCLING_SERVE_ENG_LOC_NUM_WORKERS); "
+        "pushing more in-flight than that just queues at the server.",
+    )
 
     # SSH / Slurm
     p.add_argument("--host", default=DEFAULT_HOST)
@@ -520,22 +602,34 @@ def main() -> None:
     p.add_argument("--key", default=DEFAULT_KEY)
     p.add_argument("--remote-dir", default=DEFAULT_REMOTE_DIR)
     p.add_argument("--partition", default="gpunormal")
-    p.add_argument("--exclude", default="",
-                   help="Slurm node exclude list, e.g. c001 or c001,c002")
     p.add_argument(
-        "--gres", default="gpu:1",
+        "--exclude", default="", help="Slurm node exclude list, e.g. c001 or c001,c002"
+    )
+    p.add_argument(
+        "--gres",
+        default="gpu:1",
         help="Slurm GRES. 'gpu:1' = any GPU. 'gpu:a100:1' to demand A100.",
     )
     p.add_argument("--cpus-per-task", type=int, default=8)
     p.add_argument("--mem", default="32G")
-    p.add_argument("--time", default="04:00:00",
-                   help="Slurm time limit. Docling per-PDF is variable; reserve "
-                        "generously to ride out queue contention.")
+    p.add_argument(
+        "--time",
+        default="04:00:00",
+        help="Slurm time limit. Docling per-PDF is variable; reserve "
+        "generously to ride out queue contention.",
+    )
 
-    p.add_argument("--force", action="store_true",
-                   help="re-process PDFs whose markdown already exists")
-    p.add_argument("--report", type=Path, default=None,
-                   help="optional tab-separated per-PDF report")
+    p.add_argument(
+        "--force",
+        action="store_true",
+        help="re-process PDFs whose markdown already exists",
+    )
+    p.add_argument(
+        "--report",
+        type=Path,
+        default=None,
+        help="optional tab-separated per-PDF report",
+    )
     args = p.parse_args()
     rc = asyncio.run(main_async_safe(args))
     sys.exit(rc)
