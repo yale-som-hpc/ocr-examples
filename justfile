@@ -1,3 +1,5 @@
+export UV_CACHE_DIR := env_var_or_default("UV_CACHE_DIR", ".uv-cache")
+
 # show available recipes
 default:
     @just --list
@@ -5,8 +7,9 @@ default:
 # check local command-line tools used by the examples
 check:
     @command -v uv >/dev/null && echo "uv: $(command -v uv)" || echo "uv: missing"
+    @command -v just >/dev/null && echo "just: $(command -v just)" || echo "just: missing"
     @command -v ssh >/dev/null && echo "ssh: $(command -v ssh)" || echo "ssh: missing"
-    @echo "HPC container runtime check: ssh hpc 'module load apptainer >/dev/null 2>&1 || true; apptainer --version'"
+    @HPC_HOST="${HPC_HOST:-hpc.som.yale.edu}"; echo "HPC host: $HPC_HOST"; ssh "$HPC_HOST" 'module load apptainer >/dev/null 2>&1 || true; apptainer --version'
 
 # download public OCRmyPDF sample documents and write data/samples/manifest.txt
 samples:
@@ -16,9 +19,9 @@ samples:
 prepare-documents:
     uv run scripts/prepare_sample_documents.py
 
-# sync this repo to ~/ocr-examples on HPC without touching remote caches/results
+# sync code to HPC without copying local data, caches, or results
 sync-hpc:
-    rsync -az --delete --exclude .uv-cache --exclude results --exclude __pycache__ --exclude '*.pyc' ./ hpc:~/ocr-examples/
+    bash hpc/bin/sync.sh
 
 # show current Slurm queue entries, marking OCR example service jobs
 hpc-status *args:
@@ -62,15 +65,15 @@ smoke-all *args:
 
 # lint Python scripts and clients with Ruff
 lint:
-    UV_CACHE_DIR=.uv-cache uv run --with ruff==0.15.19 ruff check scripts hpc/client
+    uv run --with ruff==0.15.19 ruff check scripts hpc/client
 
 # check Python formatting without changing files
 format-check:
-    UV_CACHE_DIR=.uv-cache uv run --with ruff==0.15.19 ruff format --check scripts hpc/client
+    uv run --with ruff==0.15.19 ruff format --check scripts hpc/client
 
 # format Python scripts and clients with Ruff
 format:
-    UV_CACHE_DIR=.uv-cache uv run --with ruff==0.15.19 ruff format scripts hpc/client
+    uv run --with ruff==0.15.19 ruff format scripts hpc/client
 
 # Syntax-check scripts that do not need OCR engines or Python dependencies
 test:

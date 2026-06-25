@@ -42,7 +42,7 @@ import pypdfium2 as pdfium
 from PIL import Image
 from openai import AsyncOpenAI
 
-DEFAULT_HOST = os.environ.get("HPC_HOST", "hpc")
+DEFAULT_HOST = os.environ.get("HPC_HOST", "hpc.som.yale.edu")
 DEFAULT_USER = os.environ.get("HPC_USER") or os.environ.get("USER", "")
 DEFAULT_KEY = os.path.expanduser(os.environ.get("HPC_KEY", ""))
 DEFAULT_REMOTE_DIR = os.environ.get("HPC_REMOTE_DIR", "ocr-examples")
@@ -623,7 +623,7 @@ async def teardown_worker(w: Worker) -> None:
 
 
 def parse_pdf_list(list_path: Path, default_out_dir: Path) -> list[tuple[Path, Path]]:
-    """Parse --pdf-list. Each non-empty line is either:
+    """Parse --pdf-list. Each non-empty, non-comment line is either:
       - "<pdf_path>"                   → output goes to default_out_dir/<stem>.md
       - "<pdf_path>\t<out_md_path>"    → output goes to the explicit path
 
@@ -633,7 +633,7 @@ def parse_pdf_list(list_path: Path, default_out_dir: Path) -> list[tuple[Path, P
     pairs: list[tuple[Path, Path]] = []
     for line in list_path.read_text().splitlines():
         line = line.rstrip("\n")
-        if not line.strip():
+        if not line.strip() or line.lstrip().startswith("#"):
             continue
         if "\t" in line:
             in_str, out_str = line.split("\t", 1)

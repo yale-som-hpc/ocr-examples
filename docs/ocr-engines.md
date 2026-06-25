@@ -47,6 +47,14 @@ script with `--from-file`.
 
 ## Single-command smoke tests
 
+Before tunnel smoke tests, sync the code to the HPC login node:
+
+```sh
+export HPC_HOST=hpc.som.yale.edu
+export HPC_REMOTE_DIR=ocr-examples
+just sync-hpc
+```
+
 Run one engine/mode smoke test:
 
 ```sh
@@ -67,7 +75,7 @@ just smoke-all
 By default, that command requests `gpu:1` for the RTX-capable tunnel engines
 and `gpu:a100:1` for `unlimited_ocr`.
 
-Run tunnel smoke tests in parallel when the GPU partition has room:
+Run tunnel smoke tests in parallel only when the GPU partition has room:
 
 ```sh
 just smoke-all --parallel-tunnel 3
@@ -94,8 +102,9 @@ Baidu Unlimited-OCR currently needs A100 on SOM HPC:
 just smoke unlimited_ocr tunnel --hpc-gres gpu:a100:1
 ```
 
-The full all-engine tunnel matrix can be forced onto A100 if you want one
-homogeneous resource request for every tunnel backend:
+The full all-engine tunnel matrix can be forced onto A100 for validation when
+that is explicitly needed. Do not use this as the default example; it increases
+pressure on the A100 nodes:
 
 ```sh
 just smoke all tunnel --hpc-gres gpu:a100:1 --workers 1 --in-flight 1 --parallel-tunnel 1
@@ -109,7 +118,9 @@ The full matrix runs disk mode for `pypdf`, `docling`, `olmocr2`,
 ## Disk-backed/local smoke tests
 
 These read PDFs from disk and write outputs to disk. Use them only for public
-sample PDFs or data that is approved for the storage location.
+sample PDFs or data that is approved for the storage location. The `olmocr2`,
+`deepseek_ocr`, and `glm_ocr` local disk commands use MLX and require Apple
+Silicon.
 
 ```sh
 uv run --script scripts/documents_process.py \
@@ -168,11 +179,14 @@ not contain document bytes or OCR output.
 The current OCR commands against the public sample documents are:
 
 ```sh
-# Use the local SSH alias and the remote repo path synced to the cluster.
-export HPC_HOST=hpc
+# Use the canonical login host and the remote repo path synced to the cluster.
+# You must be on the Yale VPN to reach hpc.som.yale.edu.
+export HPC_HOST=hpc.som.yale.edu
 export HPC_USER=
 export HPC_KEY=
 export HPC_REMOTE_DIR=ocr-examples
+
+just sync-hpc
 
 # docling
 uv run --script scripts/documents_process.py \
@@ -220,5 +234,7 @@ smoke tests on RTX 8000 when `c001` is excluded. Unlimited-OCR starts on RTX
 but fails the first SGLang request with `cudaErrorNoKernelImageForDevice` in
 the fused-MoE path, so the working example requests A100.
 
-For private PDFs, keep the `--pdf-list` on the trusted local side. Do not copy
-the PDFs or OCR outputs to shared HPC storage.
+For private PDFs, keep the document layout and document-id list on the trusted
+local side. The high-level wrappers create the lower-level `--pdf-list` files
+locally before they start the tunnel clients. Do not copy the PDFs or OCR
+outputs to shared HPC storage.

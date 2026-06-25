@@ -2,6 +2,7 @@
 .venv/
 .uv-cache/
 .uv-tools/
+.ruff_cache/
 __pycache__/
 *.pyc
 

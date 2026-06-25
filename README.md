@@ -7,30 +7,54 @@ workflows. We highly recommend your AI agent load the
 before launching jobs on the SOM HPC. We expect most users to customize these
 scripts for their own document layout and output paths.
 
-## What is here
+## Orientation
 
-| Path | Purpose |
+This repo has two supported workflows:
+
+| Workflow | Use when | Data location |
 | --- | --- |
-| `examples/sample-documents.tsv` | Curated public OCRmyPDF test PDFs to download for validation |
-| `examples/engine-backends.tsv` | The six OCR engines and their disk/tunnel backends |
-| `docs/ocr-engines.md` | Copy-paste OCR engine smoke-test commands |
-| `scripts/download_sample_documents.py` | Download sample PDFs and write `data/samples/manifest.txt` |
-| `scripts/prepare_sample_documents.py` | Copy sample PDFs into the `data/documents/<guid>/document.pdf` layout |
-| `scripts/ocr_engine_disk.py` | Disk-backed smoke runner for the OCR engine set |
-| `examples/manifest.example.txt` | Example manifest format |
-| `justfile` | Convenience recipes |
+| Disk-backed OCR | Public PDFs, sample PDFs, or files approved for the current filesystem | PDFs and OCR outputs live under `data/documents/<guid>/` or another approved `--documents-root` |
+| Tunneled HPC OCR | Documents that should not be copied to persistent HPC storage | The trusted local machine reads PDFs; a Slurm compute-node service receives requests over SSH tunnel; OCR output is written locally |
+
+Important vocabulary:
+
+- `trusted local machine`: the machine where private or controlled PDFs may live
+- `hpc.som.yale.edu`: the canonical SOM HPC SSH host; you must be on the Yale VPN to reach it
+- `compute node`: the Slurm-allocated host where containerized OCR services run
+- `document layout`: `<documents-root>/<guid>/document.pdf`
+- `--from-file`: high-level wrapper input containing one UUID/GUID document ID per line
+- `--pdf-list`: lower-level HTTP-client input containing direct PDF paths, optionally as `input_pdf<TAB>output_md`
+
+If you are an AI assistant, read `README.md`, `docs/ocr-engines.md`, `justfile`,
+and the relevant script `--help` before changing commands. Start with public
+samples, one worker, and one engine. Do not increase concurrency or request A100
+GPUs unless the user explicitly asks or the engine requires it.
+
+## What is Here
+
+| Area | Purpose |
+| --- | --- |
+| `README.md` | Human and AI-agent orientation, safe first commands, and data-layout rules |
+| `docs/ocr-engines.md` | Engine matrix, upstream links, and copy-paste smoke-test commands |
+| `examples/` | Public sample catalog, engine backend table, and lower-level `--pdf-list` example |
+| `scripts/` | High-level wrappers, sample preparation, smoke tests, and Slurm cleanup helpers |
+| `hpc/client/` | Low-level SSH tunnel clients for Docling, vLLM, and SGLang services |
+| `hpc/slurm/` | Containerized Slurm service scripts run on compute nodes |
+| `justfile` | Convenience recipes for setup, smoke tests, linting, sync, and cleanup |
 
 ## Install prerequisites
 
-These examples use `uv` to run Python scripts with inline dependencies. The HPC
-GPU services run in Apptainer containers; users should not need to build a
-repo-local Python environment or install OCR libraries by hand.
+These examples use [`uv`](https://docs.astral.sh/uv/) to run Python scripts with
+inline dependencies and [`just`](https://just.systems/) for convenience recipes.
+The HPC GPU services run in Apptainer containers; users should not need to build
+a repo-local Python environment or install OCR libraries by hand.
 
 On the trusted local machine:
 
 ```sh
 uv --version
-ssh hpc true
+just --version
+ssh hpc.som.yale.edu true
 ```
 
 On the HPC login node:
@@ -45,6 +69,9 @@ Check what the scripts can see:
 ```sh
 just check
 ```
+
+`just check` uses `${HPC_HOST:-hpc.som.yale.edu}`. If you have an SSH alias
+named `hpc`, set `HPC_HOST=hpc` for these examples.
 
 ## Public sample documents
 
@@ -106,9 +133,18 @@ just engine-glm --include-text-native --force
 ```
 
 Use `--use-hpc` on the engine scripts for the containerized GPU services.
-Those scripts launch Slurm jobs politely, tunnel the service back over SSH, and
-clean up matching service jobs with `just hpc-cleanup` if something is
-interrupted.
+Those scripts launch Slurm jobs politely and tunnel the service back over SSH.
+Run `just sync-hpc` after changing this repo locally so the login node has the
+same `hpc/`, `scripts/`, and `examples/` files. The sync recipe uses
+`${HPC_HOST:-hpc.som.yale.edu}` and `${HPC_REMOTE_DIR:-ocr-examples}` and
+excludes local `data/`, `results/`, and cache directories by default. If a run
+is interrupted, inspect and clean up matching service jobs:
+
+```sh
+just hpc-status --ocr-only
+just hpc-cleanup --dry-run
+just hpc-cleanup
+```
 
 ## Polite HPC batch OCR
 
@@ -167,9 +203,10 @@ For PII or DUA-covered documents, do not copy input files to HPC project, home, 
 scratch storage unless your agreement explicitly allows it.
 
 Use the tunneled engine workflows when you need the compute node to see bytes
-only over the tunnel and return OCR text in the HTTP response. The services bind
-to `127.0.0.1` on the compute node and use `/dev/shm` for request/runtime
-temporary files:
+only over the tunnel and return OCR text in the HTTP response. The trusted local
+side binds the SSH tunnel to `127.0.0.1`; the compute-node service listens on a
+Slurm-allocated node port, requires a per-job API key, and points request/runtime
+temporary directories at `/dev/shm`:
 
 ```sh
 uv run --script scripts/olmocr2_extract.py \

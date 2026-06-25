@@ -1,4 +1,6 @@
-# One input document per line. Blank lines and comments are ignored.
+# Lower-level --pdf-list example for hpc/client/* scripts.
+# One input PDF per line. Blank lines and comments are ignored.
+# Lines may also be input_pdf<TAB>output_md when callers need explicit outputs.
 /path/to/documents/sample_001.pdf
 /path/to/documents/sample_002.pdf
-/path/to/documents/page_001.png
+/path/to/documents/sample_003.pdf	/path/to/output/sample_003.md

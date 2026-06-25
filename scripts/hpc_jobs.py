@@ -16,7 +16,7 @@ import sys
 from dataclasses import dataclass
 
 
-DEFAULT_HOST = os.environ.get("HPC_HOST", "hpc")
+DEFAULT_HOST = os.environ.get("HPC_HOST", "hpc.som.yale.edu")
 DEFAULT_USER = os.environ.get("HPC_USER") or os.environ.get("USER", "")
 DEFAULT_KEY = os.path.expanduser(os.environ.get("HPC_KEY", ""))
 

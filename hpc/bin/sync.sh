@@ -2,15 +2,17 @@
 # Sync this repo from the trusted local client to the cluster's project dir.
 #
 # One-way: the trusted local client is source of truth. Run this after editing any HPC code.
+# The default excludes local data/results/cache directories so documents are
+# not copied to HPC by accident.
 #
 # Usage:
-#   bin/sync.sh
-#   bin/sync.sh --dry-run
-#   bin/sync.sh --delete   # also remove cluster-side files that no longer exist locally
+#   hpc/bin/sync.sh
+#   hpc/bin/sync.sh --dry-run
+#   hpc/bin/sync.sh --delete   # also remove cluster-side files that no longer exist locally
 set -euo pipefail
 
 # Defaults (override via env if you want)
-: "${HPC_HOST:=hpc}"
+: "${HPC_HOST:=hpc.som.yale.edu}"
 : "${HPC_USER:=${USER:-}}"
 : "${HPC_KEY:=}"
 : "${HPC_REMOTE_DIR:=ocr-examples}"  # relative to $HOME on cluster
@@ -31,7 +33,7 @@ SOURCE_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 # Quote / trailing-slash semantics: trailing / on source means "contents of",
 # without means "the dir itself". We want the repo contents to land in
 # $HPC_REMOTE_DIR/ on the cluster.
-echo "syncing $SOURCE_DIR/  →  $HPC_USER@$HPC_HOST:$HPC_REMOTE_DIR/"
+echo "syncing $SOURCE_DIR/  ->  $HPC_USER@$HPC_HOST:$HPC_REMOTE_DIR/"
 if [[ -n "$HPC_KEY" ]]; then
     echo "  (using key: $HPC_KEY)"
 else
@@ -50,6 +52,9 @@ rsync \
     --partial \
     --exclude '.venv/' \
     --exclude '.uv-cache/' \
+    --exclude '.uv-tools/' \
+    --exclude '.ruff_cache/' \
+    --exclude 'data/' \
     --exclude 'results/' \
     --exclude '__pycache__/' \
     --exclude '*.pyc' \

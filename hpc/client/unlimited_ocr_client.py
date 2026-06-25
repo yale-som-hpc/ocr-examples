@@ -173,7 +173,7 @@ def render_and_encode(pdf_bytes: bytes, scale: float, jpeg_quality: int) -> list
 def parse_pdf_list(list_path: Path, default_out_dir: Path) -> list[tuple[Path, Path]]:
     pairs: list[tuple[Path, Path]] = []
     for line in list_path.read_text().splitlines():
-        if not line.strip():
+        if not line.strip() or line.lstrip().startswith("#"):
             continue
         if "\t" in line:
             in_str, out_str = line.split("\t", 1)

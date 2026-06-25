@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # One-time setup on the HPC login node.
 #
-# Run this AFTER bin/sync.sh has pushed the code, FROM the cluster:
-#   ssh hpc 'cd ~/ocr-examples && bash hpc/bin/bootstrap.sh'
+# Run this after `just sync-hpc` or `hpc/bin/sync.sh` has pushed the code,
+# from the cluster:
+#   ssh hpc.som.yale.edu 'cd ~/ocr-examples && bash hpc/bin/bootstrap.sh'
 #
 # Idempotent: safe to re-run. Skips work already done.
 set -euo pipefail
