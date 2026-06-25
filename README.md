@@ -192,7 +192,7 @@ uv run --script scripts/olmocr2_extract.py \
   --from-file document-ids.txt \
   --documents-root /path/to/document-layout \
   --use-hpc --workers 1 --in-flight 2 \
-  --hpc-gres gpu:rtx8000:1 --hpc-exclude c001
+  --hpc-gres gpu:rtx8000:1 --hpc-exclude c001 --hpc-mem 32G
 ```
 
 Start with one worker and a small `--in-flight` value. Increase only after a
@@ -220,7 +220,7 @@ uv run --script scripts/olmocr2_extract.py \
   --from-file /secure/local/document-list.txt \
   --documents-root /secure/local/document-layout \
   --use-hpc --workers 1 --in-flight 2 \
-  --hpc-gres gpu:rtx8000:1 --hpc-exclude c001 \
+  --hpc-gres gpu:rtx8000:1 --hpc-exclude c001 --hpc-mem 32G \
   --include-text-native
 ```
 

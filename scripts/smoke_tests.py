@@ -437,7 +437,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--hpc-mem",
-        default="64G",
+        default="32G",
         help="Slurm memory request per tunnel worker. Docling has its own lower default "
         "unless this shared smoke-test override is set.",
     )

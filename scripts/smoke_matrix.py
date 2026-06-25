@@ -78,6 +78,11 @@ def unsupported_reason(case: MatrixCase) -> str | None:
         return "no disk/local backend in this repo"
     if case.mode == "tunnel" and case.engine not in TUNNEL_ENGINES:
         return "no tunneled HPC service backend in this repo"
+    if case.engine == "unlimited_ocr" and case.mode == "tunnel" and case.gpu == "rtx":
+        return (
+            "known unsupported on SOM RTX 8000: current Baidu/SGLang wheel "
+            "fails in fused-MoE CUDA kernels; use A100"
+        )
     return None
 
 
@@ -270,7 +275,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--a100-gres", default=GPU_GRES["a100"])
     parser.add_argument("--rtx-exclude", default=GPU_EXCLUDE["rtx"])
     parser.add_argument("--a100-exclude", default=GPU_EXCLUDE["a100"])
-    parser.add_argument("--hpc-mem", default="64G")
+    parser.add_argument("--hpc-mem", default="32G")
     parser.add_argument("--hpc-cpus", type=int, default=8)
     parser.add_argument("--hpc-time", default="02:00:00")
     parser.add_argument("--disk-timeout", type=int, default=600)

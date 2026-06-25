@@ -50,12 +50,14 @@ rsync \
     -av \
     --human-readable \
     --partial \
+    --exclude '.git/' \
     --exclude '.venv/' \
     --exclude '.uv-cache/' \
     --exclude '.uv-tools/' \
     --exclude '.ruff_cache/' \
     --exclude 'data/' \
     --exclude 'results/' \
+    --exclude 'logs/' \
     --exclude '__pycache__/' \
     --exclude '*.pyc' \
     --exclude '.cache/' \

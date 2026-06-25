@@ -71,7 +71,12 @@ def parse_squeue(output: str) -> list[SlurmJob]:
     for line in output.splitlines():
         if not line.strip():
             continue
-        parts = line.split("\t", 4)
+        if "|" in line:
+            parts = line.split("|", 4)
+        elif "\t" in line:
+            parts = line.split("\t", 4)
+        else:
+            parts = line.split(None, 4)
         if len(parts) != 5:
             continue
         jobs.append(SlurmJob(*parts))
@@ -83,7 +88,7 @@ def is_ocr_job(job: SlurmJob) -> bool:
 
 
 def list_jobs(args: argparse.Namespace) -> list[SlurmJob]:
-    remote_cmd = r'squeue -h -u "$USER" -o "%i\t%j\t%T\t%M\t%R"'
+    remote_cmd = r'squeue -h -u "$USER" -o "%i|%j|%T|%M|%R"'
     proc = run_ssh(args, remote_cmd)
     if proc.returncode != 0:
         sys.stderr.write(proc.stderr)

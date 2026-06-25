@@ -91,8 +91,10 @@ That enumerates every `ENGINE-MODE-GPU` cell for `rtx` and `a100`, writes
 `results/smoke-matrix/report.tsv`, and skips cells that do not exist in this
 repo such as `pypdf-tunnel-*` and `unlimited_ocr-disk-*`. Disk rows are repeated
 under both GPU labels for matrix completeness, but disk mode does not request a
-Slurm GPU; the GPU class affects tunnel rows. A matrix cell passes only if the
-engine command exits successfully and expected-content validation passes.
+Slurm GPU; the GPU class affects tunnel rows. The matrix also skips
+`unlimited_ocr-tunnel-rtx` because the current Baidu/SGLang wheel fails on
+RTX 8000. A matrix cell passes only if the engine command exits successfully
+and expected-content validation passes.
 
 Run tunnel smoke tests in parallel only when the GPU partition has room:
 
@@ -109,10 +111,10 @@ just smoke-all --disk-timeout 600 --tunnel-timeout 1800
 On SOM HPC, prefer RTX 8000 for the engines that support it:
 
 ```sh
-just smoke docling tunnel --hpc-gres gpu:rtx8000:1 --hpc-exclude c001
-just smoke olmocr2 tunnel --hpc-gres gpu:rtx8000:1 --hpc-exclude c001
-just smoke deepseek_ocr tunnel --hpc-gres gpu:rtx8000:1 --hpc-exclude c001
-just smoke glm_ocr tunnel --hpc-gres gpu:rtx8000:1 --hpc-exclude c001
+just smoke docling tunnel --hpc-gres gpu:rtx8000:1 --hpc-exclude c001 --hpc-mem 32G
+just smoke olmocr2 tunnel --hpc-gres gpu:rtx8000:1 --hpc-exclude c001 --hpc-mem 32G
+just smoke deepseek_ocr tunnel --hpc-gres gpu:rtx8000:1 --hpc-exclude c001 --hpc-mem 32G
+just smoke glm_ocr tunnel --hpc-gres gpu:rtx8000:1 --hpc-exclude c001 --hpc-mem 32G
 ```
 
 Baidu Unlimited-OCR currently needs A100 on SOM HPC:
@@ -220,7 +222,7 @@ uv run --script scripts/documents_process.py \
 uv run --script scripts/olmocr2_extract.py \
   --from-file data/samples/documents.txt \
   --use-hpc --workers 1 --in-flight 2 \
-  --hpc-gres gpu:rtx8000:1 --hpc-exclude c001 \
+  --hpc-gres gpu:rtx8000:1 --hpc-exclude c001 --hpc-mem 32G \
   --hpc-client hpc/client/vllm_http_client.py \
   --include-text-native --force
 
@@ -228,7 +230,7 @@ uv run --script scripts/olmocr2_extract.py \
 uv run --script scripts/deepseek_ocr_extract.py \
   --from-file data/samples/documents.txt \
   --use-hpc --workers 1 --in-flight 2 \
-  --hpc-gres gpu:rtx8000:1 --hpc-exclude c001 \
+  --hpc-gres gpu:rtx8000:1 --hpc-exclude c001 --hpc-mem 32G \
   --hpc-client hpc/client/vllm_http_client.py \
   --include-text-native --force
 
@@ -236,7 +238,7 @@ uv run --script scripts/deepseek_ocr_extract.py \
 uv run --script scripts/glm_ocr_extract.py \
   --from-file data/samples/documents.txt \
   --use-hpc --workers 1 --in-flight 2 \
-  --hpc-gres gpu:rtx8000:1 --hpc-exclude c001 \
+  --hpc-gres gpu:rtx8000:1 --hpc-exclude c001 --hpc-mem 32G \
   --hpc-client hpc/client/vllm_http_client.py \
   --include-text-native --force
 
