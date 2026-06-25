@@ -52,7 +52,15 @@ engine-glm *args:
 engine-unlimited *args:
     uv run --script scripts/unlimited_ocr_extract.py --from-file data/samples/documents.txt {{args}}
 
+# run one smoke test, e.g. `just smoke docling tunnel`
+smoke engine="all" mode="all" *args:
+    uv run scripts/smoke_tests.py --engine {{quote(engine)}} --mode {{quote(mode)}} {{args}}
+
+# run all supported disk and tunnel smoke tests; pass --parallel-tunnel N for GPU concurrency
+smoke-all *args:
+    uv run scripts/smoke_tests.py --engine all --mode all {{args}}
+
 # Syntax-check scripts that do not need OCR engines or Python dependencies
 test:
-    uv run python -c 'import ast, pathlib; files=("scripts/download_sample_documents.py","scripts/prepare_sample_documents.py","scripts/ocr_engine_disk.py","scripts/ocr_provenance.py","scripts/hpc_jobs.py","scripts/documents_extract.py","scripts/olmocr2_extract.py","scripts/deepseek_ocr_extract.py","scripts/glm_ocr_extract.py","scripts/unlimited_ocr_extract.py","scripts/documents_process.py","hpc/client/vllm_http_client.py","hpc/client/docling_http_client.py","hpc/client/unlimited_ocr_client.py"); [ast.parse(pathlib.Path(f).read_text(), filename=f) for f in files]'
+    uv run python -c 'import ast, pathlib; files=("scripts/download_sample_documents.py","scripts/prepare_sample_documents.py","scripts/ocr_engine_disk.py","scripts/ocr_provenance.py","scripts/hpc_jobs.py","scripts/smoke_tests.py","scripts/documents_extract.py","scripts/olmocr2_extract.py","scripts/deepseek_ocr_extract.py","scripts/glm_ocr_extract.py","scripts/unlimited_ocr_extract.py","scripts/documents_process.py","hpc/client/vllm_http_client.py","hpc/client/docling_http_client.py","hpc/client/unlimited_ocr_client.py"); [ast.parse(pathlib.Path(f).read_text(), filename=f) for f in files]'
     bash -n hpc/slurm/vllm_serve_apptainer.slurm hpc/slurm/docling_serve.slurm hpc/slurm/sglang_serve.slurm hpc/bin/bootstrap.sh hpc/bin/sync.sh

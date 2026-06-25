@@ -125,6 +125,7 @@ async def launch_vllm_serve(
     pip_deps: str | None = None,
     patch_mrope: bool = False,
     extra_env: dict[str, str] | None = None,
+    exclude: str | None = None,
 ) -> tuple[asyncio.subprocess.Process, ServerEndpoint]:
     """Open SSH #1, launch the chosen slurm_script, return process + parsed endpoint.
 
@@ -177,11 +178,13 @@ async def launch_vllm_serve(
         if os.environ.get(var) is not None:
             export_vars.append(var)
     export_arg = "ALL," + ",".join(export_vars)
+    exclude_arg = f"--exclude={shlex.quote(exclude)} " if exclude else ""
     remote_cmd = (
         f"cd {shlex.quote(remote_dir)} && "
         f"{env_prefix}"
         f"srun "
         f"--partition={partition} "
+        f"{exclude_arg}"
         f"--gres={gres} "
         f"--cpus-per-task={cpus_per_task} "
         f"--mem={mem} "
@@ -461,6 +464,7 @@ async def launch_one_worker(args: argparse.Namespace, idx: int) -> Worker:
         model_id=args.model, max_model_len=args.max_model_len,
         slurm_script=args.slurm_script, image=args.image,
         pip_deps=args.pip_deps, patch_mrope=args.patch_mrope,
+        exclude=args.exclude,
     )
     tunnel_proc = await open_tunnel(args.host, args.user, args.key, endpoint)
     await asyncio.sleep(1.0)
@@ -753,6 +757,8 @@ def main() -> None:
     p.add_argument("--key", default=DEFAULT_KEY)
     p.add_argument("--remote-dir", default=DEFAULT_REMOTE_DIR)
     p.add_argument("--partition", default="gpunormal")
+    p.add_argument("--exclude", default="",
+                   help="Slurm node exclude list, e.g. c001 or c001,c002")
     p.add_argument(
         "--gres", default="gpu:1",
         help="Slurm GRES. 'gpu:1' = any GPU (good default). 'gpu:a100:1' to "

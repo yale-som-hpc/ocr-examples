@@ -1,7 +1,7 @@
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
-#     "mlx-vlm>=0.3.11",
+#     "mlx-vlm>=0.3.11; platform_system == 'Darwin' and platform_machine == 'arm64'",
 #     "pypdfium2>=4.30",
 # ]
 # ///
@@ -109,6 +109,12 @@ def main():
                    help="(--use-hpc) path to vllm_http_client.py")
     p.add_argument("--hpc-gres", default="gpu:1",
                    help="(--use-hpc) Slurm GRES; 'gpu:1' = any GPU, 'gpu:a100:1' = A100 only")
+    p.add_argument("--hpc-exclude", default="",
+                   help="(--use-hpc) Slurm node exclude list, e.g. c001")
+    p.add_argument("--hpc-mem", default="64G",
+                   help="(--use-hpc) Slurm memory request per worker")
+    p.add_argument("--hpc-cpus", type=int, default=8,
+                   help="(--use-hpc) Slurm CPU request per worker")
     p.add_argument("--hpc-time", default="02:00:00",
                    help="(--use-hpc) Slurm time limit per worker. Full corpus "
                         "is ~20 min on 4 A100; 2h is generous headroom.")
@@ -203,12 +209,16 @@ def main():
             "--workers", str(args.workers),
             "--in-flight", str(args.in_flight),
             "--gres", args.hpc_gres,
+            "--mem", args.hpc_mem,
+            "--cpus-per-task", str(args.hpc_cpus),
             "--time", args.hpc_time,
             "--max-tokens", str(args.max_tokens),
             "--model", HPC_MODEL,
             "--slurm-script", "hpc/slurm/vllm_serve_apptainer.slurm",
             "--image", HPC_IMAGE,
         ]
+        if args.hpc_exclude:
+            cmd.extend(["--exclude", args.hpc_exclude])
         if args.force:
             cmd.append("--force")
         print(

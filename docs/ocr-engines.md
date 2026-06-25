@@ -12,6 +12,20 @@ engine slugs match `scripts/ocr_provenance.py`.
 | `glm_ocr` | MLX VLM on Apple Silicon | vLLM OpenAI-compatible server through SSH tunnel |
 | `unlimited_ocr` | No local disk backend | SGLang server through SSH tunnel |
 
+## Engine and runtime links
+
+| Engine/runtime | Upstream links |
+| --- | --- |
+| `pypdf` | [documentation](https://pypdf.readthedocs.io/), [GitHub](https://github.com/py-pdf/pypdf) |
+| `docling` | [documentation](https://docling-project.github.io/docling/), [GitHub](https://github.com/docling-project/docling), [Docling Serve](https://github.com/docling-project/docling-serve) |
+| `olmocr2` | [olmOCR GitHub](https://github.com/allenai/olmocr), [Hugging Face model](https://huggingface.co/allenai/olmOCR-2-7B-1025), [paper](https://arxiv.org/abs/2510.19817) |
+| `deepseek_ocr` | [DeepSeek-OCR-2 GitHub](https://github.com/deepseek-ai/DeepSeek-OCR-2), [Hugging Face model](https://huggingface.co/deepseek-ai/DeepSeek-OCR-2), [paper](https://arxiv.org/abs/2601.20552) |
+| `glm_ocr` | [Hugging Face model](https://huggingface.co/zai-org/GLM-OCR), [Z.ai Hugging Face org](https://huggingface.co/zai-org), [Z.ai GitHub org](https://github.com/zai-org) |
+| `unlimited_ocr` | [Baidu Unlimited-OCR GitHub](https://github.com/baidu/Unlimited-OCR), [Hugging Face model](https://huggingface.co/baidu/Unlimited-OCR) |
+| `vllm` | [documentation](https://docs.vllm.ai/), [GitHub](https://github.com/vllm-project/vllm), [project site](https://vllm.ai/) |
+| `sglang` | [documentation](https://docs.sglang.ai/), [GitHub](https://github.com/sgl-project/sglang), [project site](https://sglang.io/) |
+| `mlx-vlm` | [GitHub](https://github.com/Blaizzy/mlx-vlm), [mlx-community models](https://huggingface.co/mlx-community) |
+
 ## Prepare public sample documents
 
 The sample-document scripts operate on deterministic sample document IDs and expect
@@ -30,6 +44,67 @@ just prepare-documents
 
 That writes `data/samples/documents.txt`, which can be passed to every OCR engine
 script with `--from-file`.
+
+## Single-command smoke tests
+
+Run one engine/mode smoke test:
+
+```sh
+just smoke pypdf disk
+just smoke docling tunnel
+just smoke olmocr2 tunnel
+just smoke deepseek_ocr tunnel
+just smoke glm_ocr tunnel
+just smoke unlimited_ocr tunnel
+```
+
+Run every supported smoke test serially:
+
+```sh
+just smoke-all
+```
+
+By default, that command requests `gpu:1` for the RTX-capable tunnel engines
+and `gpu:a100:1` for `unlimited_ocr`.
+
+Run tunnel smoke tests in parallel when the GPU partition has room:
+
+```sh
+just smoke-all --parallel-tunnel 3
+```
+
+Bound slow backends explicitly:
+
+```sh
+just smoke-all --disk-timeout 600 --tunnel-timeout 1800
+```
+
+On SOM HPC, prefer RTX 8000 for the engines that support it:
+
+```sh
+just smoke docling tunnel --hpc-gres gpu:rtx8000:1 --hpc-exclude c001
+just smoke olmocr2 tunnel --hpc-gres gpu:rtx8000:1 --hpc-exclude c001
+just smoke deepseek_ocr tunnel --hpc-gres gpu:rtx8000:1 --hpc-exclude c001
+just smoke glm_ocr tunnel --hpc-gres gpu:rtx8000:1 --hpc-exclude c001
+```
+
+Baidu Unlimited-OCR currently needs A100 on SOM HPC:
+
+```sh
+just smoke unlimited_ocr tunnel --hpc-gres gpu:a100:1
+```
+
+The full all-engine tunnel matrix can be forced onto A100 if you want one
+homogeneous resource request for every tunnel backend:
+
+```sh
+just smoke all tunnel --hpc-gres gpu:a100:1 --workers 1 --in-flight 1 --parallel-tunnel 1
+```
+
+The full matrix runs disk mode for `pypdf`, `docling`, `olmocr2`,
+`deepseek_ocr`, and `glm_ocr`; it runs tunnel mode for `docling`, `olmocr2`,
+`deepseek_ocr`, `glm_ocr`, and `unlimited_ocr`. It skips `pypdf` tunnel and
+`unlimited_ocr` disk because those backends do not exist in this repo.
 
 ## Disk-backed/local smoke tests
 
@@ -111,21 +186,24 @@ uv run --script scripts/documents_process.py \
 # olmOCR-2
 uv run --script scripts/olmocr2_extract.py \
   --from-file data/samples/documents.txt \
-  --use-hpc --workers 1 --in-flight 2 --hpc-gres gpu:a100:1 \
+  --use-hpc --workers 1 --in-flight 2 \
+  --hpc-gres gpu:rtx8000:1 --hpc-exclude c001 \
   --hpc-client hpc/client/vllm_http_client.py \
   --include-text-native --force
 
 # DeepSeek-OCR-2
 uv run --script scripts/deepseek_ocr_extract.py \
   --from-file data/samples/documents.txt \
-  --use-hpc --workers 1 --in-flight 2 --hpc-gres gpu:a100:1 \
+  --use-hpc --workers 1 --in-flight 2 \
+  --hpc-gres gpu:rtx8000:1 --hpc-exclude c001 \
   --hpc-client hpc/client/vllm_http_client.py \
   --include-text-native --force
 
 # GLM-OCR
 uv run --script scripts/glm_ocr_extract.py \
   --from-file data/samples/documents.txt \
-  --use-hpc --workers 1 --in-flight 2 --hpc-gres gpu:a100:1 \
+  --use-hpc --workers 1 --in-flight 2 \
+  --hpc-gres gpu:rtx8000:1 --hpc-exclude c001 \
   --hpc-client hpc/client/vllm_http_client.py \
   --include-text-native --force
 
@@ -136,6 +214,11 @@ uv run --script scripts/unlimited_ocr_extract.py \
   --hpc-client hpc/client/unlimited_ocr_client.py \
   --include-text-native --force
 ```
+
+Why the split: Docling, olmOCR-2, DeepSeek-OCR-2, and GLM-OCR pass tunnel
+smoke tests on RTX 8000 when `c001` is excluded. Unlimited-OCR starts on RTX
+but fails the first SGLang request with `cudaErrorNoKernelImageForDevice` in
+the fused-MoE path, so the working example requests A100.
 
 For private PDFs, keep the `--pdf-list` on the trusted local side. Do not copy
 the PDFs or OCR outputs to shared HPC storage.

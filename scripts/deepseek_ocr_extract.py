@@ -1,7 +1,7 @@
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
-#     "mlx-vlm>=0.3.11",
+#     "mlx-vlm>=0.3.11; platform_system == 'Darwin' and platform_machine == 'arm64'",
 #     "pypdfium2>=4.30",
 # ]
 # ///
@@ -116,12 +116,15 @@ def main():
     p.add_argument("--hpc-client",
                    default=str(Path(__file__).resolve().parent.parent / "hpc/client/vllm_http_client.py"),
                    help="(--use-hpc) path to vllm_http_client.py")
-    p.add_argument("--hpc-gres", default="gpu:a100:1",
-                   help="(--use-hpc) Slurm GRES. Default A100 because vLLM v0.23.0 (the "
-                        "minimum that knows about DeepseekOCR2 architecture) cleanly exits "
-                        "on Turing (RTX 8000, compute 7.x) right after startup — observed "
-                        "behavior on the cluster's c004 RTX 8000 node. Ampere or newer "
-                        "(compute >=8.0) works reliably.")
+    p.add_argument("--hpc-gres", default="gpu:1",
+                   help="(--use-hpc) Slurm GRES. Default is any GPU; pass gpu:a100:1 "
+                        "if the selected vLLM image fails on older GPU types.")
+    p.add_argument("--hpc-exclude", default="",
+                   help="(--use-hpc) Slurm node exclude list, e.g. c001")
+    p.add_argument("--hpc-mem", default="64G",
+                   help="(--use-hpc) Slurm memory request per worker")
+    p.add_argument("--hpc-cpus", type=int, default=8,
+                   help="(--use-hpc) Slurm CPU request per worker")
     p.add_argument("--hpc-time", default="02:00:00",
                    help="(--use-hpc) Slurm time limit per worker.")
     p.add_argument("--hpc-max-model-len", type=int, default=8192,
@@ -207,6 +210,8 @@ def main():
             "--workers", str(args.workers),
             "--in-flight", str(args.in_flight),
             "--gres", args.hpc_gres,
+            "--mem", args.hpc_mem,
+            "--cpus-per-task", str(args.hpc_cpus),
             "--time", args.hpc_time,
             "--max-tokens", str(args.max_tokens),
             "--model", HPC_MODEL,
@@ -219,6 +224,8 @@ def main():
             # the slurm script installs them with uv inside the container.
             "--pip-deps", "addict matplotlib",
         ]
+        if args.hpc_exclude:
+            cmd.extend(["--exclude", args.hpc_exclude])
         if args.force:
             cmd.append("--force")
         print(

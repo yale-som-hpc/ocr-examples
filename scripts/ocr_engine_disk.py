@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["pypdf>=4", "pillow", "pypdfium2"]
+# dependencies = [
+#     "pypdf>=4",
+#     "pillow",
+#     "pypdfium2",
+#     "mlx-vlm>=0.3.11; platform_system == 'Darwin' and platform_machine == 'arm64'",
+# ]
 # ///
 """Disk-backed smoke-test runner for the OCR engine set."""
 
@@ -9,7 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
-import shutil
+import platform
 import subprocess
 import sys
 import time
@@ -74,10 +79,15 @@ def run_docling(input_pdf: Path, outdir: Path) -> Path:
     started = time.time()
     run_dir = outdir / f"{input_pdf.stem}.docling-output"
     run_dir.mkdir(parents=True, exist_ok=True)
-    if shutil.which("docling"):
-        cmd = ["docling", str(input_pdf), "--to", "md", "--output", str(run_dir)]
-    else:
-        cmd = ["uv", "run", "--with", "docling", "docling", str(input_pdf), "--to", "md", "--output", str(run_dir)]
+    cmd = [
+        "uv", "run",
+        "--with", "docling",
+        "--with", "onnxruntime",
+        "docling", "convert", str(input_pdf),
+        "--to", "md",
+        "--output", str(run_dir),
+        "--ocr-engine", "rapidocr",
+    ]
     log = out_path(input_pdf, outdir, "docling", ".log")
     with log.open("w", encoding="utf-8") as handle:
         result = subprocess.run(cmd, stdout=handle, stderr=subprocess.STDOUT, text=True)
@@ -108,6 +118,11 @@ def render_pages(input_pdf: Path, scale: float):
 
 
 def run_mlx_vlm(input_pdf: Path, outdir: Path, engine: str, model_id: str, scale: float, max_tokens: int) -> Path:
+    if platform.system() != "Darwin" or platform.machine() != "arm64":
+        raise SystemExit(
+            f"{engine} disk mode uses mlx-vlm and is only supported on Apple Silicon; "
+            "use tunnel mode for HPC GPU OCR."
+        )
     started = time.time()
     from mlx_vlm import generate, load
     from mlx_vlm.prompt_utils import apply_chat_template

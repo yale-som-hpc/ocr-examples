@@ -131,12 +131,18 @@ For GPU engines, keep concurrency explicit:
 ```sh
 uv run --script scripts/olmocr2_extract.py \
   --from-file manifest.txt \
-  --use-hpc --workers 1 --in-flight 2 --hpc-gres gpu:a100:1
+  --use-hpc --workers 1 --in-flight 2 \
+  --hpc-gres gpu:rtx8000:1 --hpc-exclude c001
 ```
 
 Start with one worker and a small `--in-flight` value. Increase only after a
 small run succeeds. Avoid running OCR on login nodes; the HPC paths in this
 repo use Slurm services on compute nodes.
+
+On SOM HPC, the RTX 8000 path has been tested for Docling, olmOCR-2,
+DeepSeek-OCR-2, and GLM-OCR with `--hpc-exclude c001`. Baidu Unlimited-OCR
+currently requires `--hpc-gres gpu:a100:1`; the current Baidu/SGLang wheel
+fails on RTX 8000 during the MoE request path.
 
 ## No persistent HPC disk workflow
 
@@ -151,7 +157,8 @@ temporary files:
 ```sh
 uv run --script scripts/olmocr2_extract.py \
   --from-file /secure/local/document-list.txt \
-  --use-hpc --workers 1 --in-flight 2 --hpc-gres gpu:a100:1 \
+  --use-hpc --workers 1 --in-flight 2 \
+  --hpc-gres gpu:rtx8000:1 --hpc-exclude c001 \
   --include-text-native
 ```
 

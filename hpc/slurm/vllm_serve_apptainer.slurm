@@ -117,7 +117,9 @@ echo "VLLM_LISTEN host=$HOST port=$PORT api_key=$API_KEY" >&2
 # Auto-tune VRAM/dtype.
 VRAM_MB=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits | head -1 | tr -d ' ')
 CC_MAJOR=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader | head -1 | cut -d. -f1 | tr -d ' ')
-if   [[ $VRAM_MB -ge 70000 ]]; then MAX_NUM_SEQS=${MAX_NUM_SEQS:-64}
+if [[ $CC_MAJOR -lt 8 ]]; then
+    MAX_NUM_SEQS=${MAX_NUM_SEQS:-4}
+elif [[ $VRAM_MB -ge 70000 ]]; then MAX_NUM_SEQS=${MAX_NUM_SEQS:-64}
 elif [[ $VRAM_MB -ge 45000 ]]; then MAX_NUM_SEQS=${MAX_NUM_SEQS:-32}
 elif [[ $VRAM_MB -ge 35000 ]]; then MAX_NUM_SEQS=${MAX_NUM_SEQS:-24}
 else                                MAX_NUM_SEQS=${MAX_NUM_SEQS:-12}
@@ -129,7 +131,21 @@ elif [[ $CC_MAJOR -ge 8 ]]; then
 else
     DTYPE=float16
 fi
-echo "{\"event\":\"vram_detected\",\"mb\":$VRAM_MB,\"compute_cap\":\"$CC_MAJOR.x\",\"max_num_seqs\":$MAX_NUM_SEQS,\"dtype\":\"$DTYPE\"}" >&2
+
+ATTENTION_ARGS=()
+if [[ -n "${VLLM_ATTENTION_BACKEND:-}" ]]; then
+    ATTENTION_ARGS+=(--attention-backend "$VLLM_ATTENTION_BACKEND")
+elif [[ $CC_MAJOR -lt 8 ]]; then
+    # FlashInfer's paged prefill path can initialize as "valid" on SM75 and
+    # still fail during warmup. Triton is slower but works on RTX/Turing.
+    ATTENTION_ARGS+=(--attention-backend TRITON_ATTN)
+    export VLLM_USE_FLASHINFER_SAMPLER="${VLLM_USE_FLASHINFER_SAMPLER:-0}"
+fi
+ATTENTION_BACKEND_LABEL="${VLLM_ATTENTION_BACKEND:-auto}"
+if [[ ${#ATTENTION_ARGS[@]} -gt 0 ]]; then
+    ATTENTION_BACKEND_LABEL="${ATTENTION_ARGS[1]}"
+fi
+echo "{\"event\":\"vram_detected\",\"mb\":$VRAM_MB,\"compute_cap\":\"$CC_MAJOR.x\",\"max_num_seqs\":$MAX_NUM_SEQS,\"dtype\":\"$DTYPE\",\"attention_backend\":\"$ATTENTION_BACKEND_LABEL\"}" >&2
 echo "{\"event\":\"model_select\",\"model\":\"$MODEL\",\"max_model_len\":$MAX_MODEL_LEN,\"image\":\"$IMAGE\"}" >&2
 
 # Install engine-specific extra Python deps inside the container before
@@ -142,6 +158,7 @@ if [[ -n "$PIP_DEPS" ]]; then
         --cleanenv \
         --bind "$XDG_CACHE_HOME:$XDG_CACHE_HOME" \
         --env PYTHONUSERBASE="$PYTHONUSERBASE" \
+        --env PY_SITE="$PY_SITE" \
         --env PYTHONPATH="$PYTHONPATH" \
         --env PYTHONNOUSERSITE="$PYTHONNOUSERSITE" \
         --env TMPDIR="$WORKER_TMP" \
@@ -169,7 +186,10 @@ fi
 EXTRA_BINDS=()
 if [[ -n "$PATCH_MROPE" ]]; then
     PROJECT_DIR="${SLURM_SUBMIT_DIR:-$PWD}"
-    MROPE_SRC="$PROJECT_DIR/patches/vllm-pr42765/mrope.py"
+    MROPE_SRC="$PROJECT_DIR/hpc/patches/vllm-pr42765/mrope.py"
+    if [[ ! -f "$MROPE_SRC" ]]; then
+        MROPE_SRC="$PROJECT_DIR/patches/vllm-pr42765/mrope.py"
+    fi
     MROPE_DST="/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/rotary_embedding/mrope.py"
     if [[ ! -f "$MROPE_SRC" ]]; then
         echo "{\"event\":\"mrope_patch_missing\",\"src\":\"$MROPE_SRC\"}" >&2
@@ -192,9 +212,11 @@ apptainer exec \
     --env TEMP="$TEMP" \
     --env TMP="$TMP" \
     --env PYTHONUSERBASE="$PYTHONUSERBASE" \
+    --env PY_SITE="$PY_SITE" \
     --env PYTHONPATH="$PYTHONPATH" \
     --env PYTHONNOUSERSITE="$PYTHONNOUSERSITE" \
     --env PATH="$PATH" \
+    --env CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-}" \
     --env VLLM_NO_USAGE_STATS=1 \
     --env DO_NOT_TRACK=1 \
     "$IMAGE" \
@@ -208,6 +230,7 @@ apptainer exec \
         --max-num-seqs "$MAX_NUM_SEQS" \
         --tensor-parallel-size "$TP" \
         --trust-remote-code \
+        "${ATTENTION_ARGS[@]}" \
         $EAGER_FLAG \
         --uvicorn-log-level info \
         </dev/null >/dev/null &

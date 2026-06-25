@@ -112,12 +112,15 @@ def run_hpc(args: argparse.Namespace, jobs: list[tuple[str, Path, Path]]) -> int
         "--workers", str(args.workers),
         "--in-flight", str(args.in_flight),
         "--gres", args.hpc_gres,
+        "--mem", args.hpc_mem,
+        "--cpus-per-task", str(args.hpc_cpus),
         "--time", args.hpc_time,
         "--model", args.hpc_model,
         "--served-model-name", SERVED_MODEL_NAME,
         "--image", args.hpc_image,
         "--uv-deps", args.hpc_uv_deps,
         "--context-length", str(args.context_length),
+        "--attention-backend", args.attention_backend,
         "--max-tokens", str(args.max_tokens),
         "--image-mode", args.image_mode,
         "--scale", str(args.scale),
@@ -126,6 +129,12 @@ def run_hpc(args: argparse.Namespace, jobs: list[tuple[str, Path, Path]]) -> int
         "--ngram-window", str(args.ngram_window),
         "--request-timeout", str(args.request_timeout),
     ]
+    if args.hpc_exclude:
+        cmd.extend(["--exclude", args.hpc_exclude])
+    if args.disable_cuda_graph:
+        cmd.append("--disable-cuda-graph")
+    else:
+        cmd.append("--no-disable-cuda-graph")
     if args.force:
         cmd.append("--force")
 
@@ -159,18 +168,32 @@ def main() -> None:
     p.add_argument("--in-flight", type=int, default=8)
     p.add_argument("--hpc-client",
                    default=str(Path(__file__).resolve().parent.parent / "hpc/client/unlimited_ocr_client.py"))
-    p.add_argument("--hpc-gres", default="gpu:a100:1")
+    p.add_argument("--hpc-gres", default="gpu:a100:1",
+                   help="Slurm GPU request. Unlimited-OCR/SGLang currently needs A100 on SOM HPC; "
+                        "the current Baidu/SGLang wheel fails on RTX 8000 during the MoE request path.")
+    p.add_argument("--hpc-exclude", default="",
+                   help="Slurm node exclude list, e.g. c001")
+    p.add_argument("--hpc-mem", default="64G",
+                   help="Slurm memory request per worker")
+    p.add_argument("--hpc-cpus", type=int, default=8,
+                   help="Slurm CPU request per worker")
     p.add_argument("--hpc-time", default="02:00:00")
     p.add_argument("--hpc-model", default=HPC_MODEL)
     p.add_argument("--hpc-image", default=HPC_IMAGE)
     p.add_argument("--hpc-uv-deps", default=DEFAULT_UV_DEPS,
                    help="deps/wheels installed with uv inside the SGLang container before launch")
+    p.add_argument("--attention-backend", default="flashinfer",
+                   help="SGLang attention backend. fa3 requires SM80+; flashinfer is the portable default.")
+    p.add_argument("--disable-cuda-graph", action=argparse.BooleanOptionalAction, default=True,
+                   help="disable SGLang CUDA graph capture; default true for broader GPU compatibility.")
     p.add_argument("--context-length", type=int, default=32768)
     p.add_argument("--max-tokens", type=int, default=30000)
     p.add_argument("--image-mode", choices=("gundam", "base"), default="gundam")
     p.add_argument("--scale", type=float, default=4.0)
     p.add_argument("--jpeg-quality", type=int, default=90)
-    p.add_argument("--ngram-size", type=int, default=35)
+    p.add_argument("--ngram-size", type=int, default=0,
+                   help="enable custom no-repeat n-gram processor when >0. "
+                        "Default 0 because some SGLang/Python builds crash in this path.")
     p.add_argument("--ngram-window", type=int, default=128)
     p.add_argument("--request-timeout", type=int, default=1200)
     args = p.parse_args()
@@ -220,6 +243,8 @@ def main() -> None:
                     "image_mode": args.image_mode,
                     "scale": args.scale,
                     "jpeg_quality": args.jpeg_quality,
+                    "attention_backend": args.attention_backend,
+                    "disable_cuda_graph": args.disable_cuda_graph,
                     "ngram_size": args.ngram_size,
                     "ngram_window": args.ngram_window,
                     "workers": args.workers,

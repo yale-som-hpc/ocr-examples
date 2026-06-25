@@ -215,7 +215,7 @@ def extract_one(document_id: str, documents_root: Path, args: argparse.Namespace
             pass
 
     # ---- docling (fallback when pypdf was unusable) ----
-    if docling_mode == "defer-hpc" and not pypdf_usable and not docling_done:
+    if docling_mode == "defer-hpc" and not pypdf_usable and (args.force or not docling_done):
         # Defer to the batch HPC pass at end of main(). Don't run docling locally.
         result["needs_hpc_docling"] = True
     if docling_mode == "local" and not pypdf_usable and (args.force or not docling_done):
@@ -329,6 +329,12 @@ def main() -> None:
                         help="(--use-hpc-for-docling) concurrent PDFs per worker")
     parser.add_argument("--hpc-gres", default="gpu:1",
                         help="(--use-hpc-for-docling) Slurm GRES; 'gpu:a100:1' to demand A100")
+    parser.add_argument("--hpc-exclude", default="",
+                        help="(--use-hpc-for-docling) Slurm node exclude list, e.g. c001")
+    parser.add_argument("--hpc-mem", default="32G",
+                        help="(--use-hpc-for-docling) Slurm memory request per worker")
+    parser.add_argument("--hpc-cpus", type=int, default=8,
+                        help="(--use-hpc-for-docling) Slurm CPU request per worker")
     parser.add_argument("--hpc-time", default="04:00:00",
                         help="(--use-hpc-for-docling) Slurm time limit per worker")
     args = parser.parse_args()
@@ -424,8 +430,12 @@ def _run_hpc_docling(documents: list[str], args: argparse.Namespace, counts: dic
         "--workers", str(args.hpc_workers),
         "--in-flight", str(args.hpc_in_flight),
         "--gres", args.hpc_gres,
+        "--mem", args.hpc_mem,
+        "--cpus-per-task", str(args.hpc_cpus),
         "--time", args.hpc_time,
     ]
+    if args.hpc_exclude:
+        cmd.extend(["--exclude", args.hpc_exclude])
     if args.force:
         cmd.append("--force")
     print(

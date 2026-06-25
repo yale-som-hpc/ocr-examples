@@ -45,35 +45,36 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 # Slurm jobs that outlive their --time get killed by the scheduler, so
 # orphans from a crashed orchestrator can't linger more than the bound.
 #
-# `gres` is `gpu:a100:1` everywhere because (a) deepseek + glm require A100
-# (vLLM ≥0.23 graceful-exits on Turing) and (b) A100 is 2-3x faster than
-# RTX 8000 for the other GPU OCR engines too.
+# `gres` defaults to `gpu:1` for engines that work on RTX 8000 so examples do
+# not wait specifically for A100 nodes. Unlimited-OCR keeps an A100 default
+# because the current Baidu/SGLang wheel fails on RTX 8000 during the MoE
+# request path.
 ENGINES: dict[str, dict[str, Any]] = {
     "pypdf":    {"script": "documents_extract.py", "has_hpc": False,
                  "ocr_slug": "pypdf"},
     "docling":  {"script": "documents_extract.py", "has_hpc": True,
                  "ocr_slug": "docling",
                  "workers": 4, "in_flight": 4, "sec_per_pdf": 30,
-                 "gres": "gpu:a100:1",
+                 "gres": "gpu:1",
                  # documents_extract.py uses --hpc-workers/--hpc-in-flight
                  # prefix (different from olmocr2/deepseek/glm).
                  "workers_flag": "--hpc-workers", "in_flight_flag": "--hpc-in-flight"},
     "olmocr2":  {"script": "olmocr2_extract.py", "has_hpc": True,
                  "ocr_slug": "olmocr2",
                  "workers": 4, "in_flight": 24, "sec_per_pdf": 10,
-                 "gres": "gpu:a100:1",
+                 "gres": "gpu:1",
                  "hpc_flag": "--use-hpc",
                  "workers_flag": "--workers", "in_flight_flag": "--in-flight"},
     "deepseek": {"script": "deepseek_ocr_extract.py", "has_hpc": True,
                  "ocr_slug": "deepseek_ocr",
                  "workers": 4, "in_flight": 16, "sec_per_pdf": 20,
-                 "gres": "gpu:a100:1",
+                 "gres": "gpu:1",
                  "hpc_flag": "--use-hpc",
                  "workers_flag": "--workers", "in_flight_flag": "--in-flight"},
     "glm":      {"script": "glm_ocr_extract.py", "has_hpc": True,
                  "ocr_slug": "glm_ocr",
                  "workers": 4, "in_flight": 16, "sec_per_pdf": 15,
-                 "gres": "gpu:a100:1",
+                 "gres": "gpu:1",
                  "hpc_flag": "--use-hpc",
                  "workers_flag": "--workers", "in_flight_flag": "--in-flight"},
     "unlimited_ocr": {"script": "unlimited_ocr_extract.py", "has_hpc": True,

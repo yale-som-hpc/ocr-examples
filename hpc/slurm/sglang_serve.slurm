@@ -37,6 +37,7 @@
 #   SGLANG_ENABLE_CUSTOM_LOGIT_PROCESSOR=1  pass --enable-custom-logit-processor
 #   SGLANG_DISABLE_OVERLAP_SCHEDULE=1        pass --disable-overlap-schedule
 #   SGLANG_SKIP_SERVER_WARMUP=1              pass --skip-server-warmup
+#   SGLANG_DISABLE_CUDA_GRAPH=1              pass --disable-cuda-graph
 #
 # Disk hardening: ulimit -c 0, umask 077, private tmpfs request TMPDIR +
 # APPTAINER_TMPDIR, EXIT trap. Same envelope as the vLLM apptainer script.
@@ -87,23 +88,63 @@ SERVED_MODEL_NAME="${SGLANG_SERVED_MODEL_NAME:-$MODEL}"
 MODEL_ARG="${SGLANG_MODEL_ARG:---model-path}"
 ATTENTION_BACKEND="${SGLANG_ATTENTION_BACKEND:-}"
 PAGE_SIZE="${SGLANG_PAGE_SIZE:-}"
-KV_DTYPE="${SGLANG_KV_CACHE_DTYPE:-bf16}"
-# Push mem-fraction high per SGLang hyperparameter_tuning.md — reserve ~5-8 GB
-# for activations + CUDA graphs, give the rest to KV cache. Bigger KV cache →
-# more running requests → higher decode throughput.
-MEM_FRACTION="${SGLANG_MEM_FRACTION_STATIC:-0.90}"
-MAX_RUNNING="${SGLANG_MAX_RUNNING_REQUESTS:-32}"
 REASONING_PARSER="${SGLANG_REASONING_PARSER:-qwen3}"
-CHUNKED_PREFILL="${SGLANG_CHUNKED_PREFILL_SIZE:-4096}"
-MAX_PREFILL="${SGLANG_MAX_PREFILL_TOKENS:-8192}"
-# cuda-graph batches up to this size get captured (faster decode). Default 32
-# is conservative; docs recommend pushing to 128+ for high-TP / saturated work.
-CUDA_GRAPH_MAX_BS="${SGLANG_CUDA_GRAPH_MAX_BS:-128}"
 # Longest-prefix-match scheduling. We process N documents that share an
 # identical ~3K-token system prompt. lpm reorders requests so they share
 # RadixAttention prefix cache hits — substantial win for our workload per
 # SGLang's own tuning guide ("if your workload has many shared prefixes").
 SCHEDULE_POLICY="${SGLANG_SCHEDULE_POLICY:-lpm}"
+
+VRAM_MB=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits | head -1 | tr -d ' ')
+CC_MAJOR=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader | head -1 | cut -d. -f1 | tr -d ' ')
+
+if [[ -n "${SGLANG_KV_CACHE_DTYPE:-}" ]]; then
+    KV_DTYPE="$SGLANG_KV_CACHE_DTYPE"
+elif [[ $CC_MAJOR -ge 8 ]]; then
+    KV_DTYPE=bf16
+else
+    # Current SGLang CLI does not accept "float16" for --kv-cache-dtype, but
+    # auto detects SM75 and chooses fp16 internally.
+    KV_DTYPE=auto
+fi
+
+# Push mem-fraction high on Ampere+ per SGLang hyperparameter_tuning.md. On
+# RTX/Turing, leave more activation headroom and keep first-request latency
+# predictable for a shared queue.
+if [[ -n "${SGLANG_MEM_FRACTION_STATIC:-}" ]]; then
+    MEM_FRACTION="$SGLANG_MEM_FRACTION_STATIC"
+elif [[ $CC_MAJOR -ge 8 ]]; then
+    MEM_FRACTION=0.90
+else
+    MEM_FRACTION=0.70
+fi
+if [[ -n "${SGLANG_MAX_RUNNING_REQUESTS:-}" ]]; then
+    MAX_RUNNING="$SGLANG_MAX_RUNNING_REQUESTS"
+elif [[ $CC_MAJOR -ge 8 ]]; then
+    MAX_RUNNING=32
+else
+    MAX_RUNNING=4
+fi
+if [[ -n "${SGLANG_CHUNKED_PREFILL_SIZE:-}" ]]; then
+    CHUNKED_PREFILL="$SGLANG_CHUNKED_PREFILL_SIZE"
+elif [[ $CC_MAJOR -ge 8 ]]; then
+    CHUNKED_PREFILL=4096
+else
+    CHUNKED_PREFILL=1024
+fi
+if [[ -n "${SGLANG_MAX_PREFILL_TOKENS:-}" ]]; then
+    MAX_PREFILL="$SGLANG_MAX_PREFILL_TOKENS"
+elif [[ $CC_MAJOR -ge 8 ]]; then
+    MAX_PREFILL=8192
+else
+    MAX_PREFILL=2048
+fi
+# cuda-graph batches up to this size get captured (faster decode). Default 32
+# is conservative; docs recommend pushing to 128+ for high-TP / saturated work.
+CUDA_GRAPH_MAX_BS="${SGLANG_CUDA_GRAPH_MAX_BS:-128}"
+if [[ $CC_MAJOR -lt 8 && -z "${SGLANG_SKIP_SERVER_WARMUP:-}" ]]; then
+    SGLANG_SKIP_SERVER_WARMUP=1
+fi
 
 HOST=$(hostname -s)
 # Pick from a LOWER range than vllm_serve_apptainer.slurm (49152-65535)
@@ -128,7 +169,7 @@ nvidia-smi --query-gpu=name,memory.total --format=csv,noheader >&2 2>&1 | head -
 # Use the SAME LISTEN marker name as the vLLM scripts so vllm_http_client.py
 # (which only looks for VLLM_LISTEN) can drive this without modifications.
 echo "VLLM_LISTEN host=$HOST port=$PORT api_key=$API_KEY" >&2
-echo "{\"event\":\"model_select\",\"model\":\"$MODEL\",\"served_model\":\"$SERVED_MODEL_NAME\",\"max_model_len\":$MAX_MODEL_LEN,\"image\":\"$IMAGE\",\"tp\":$TP,\"engine\":\"sglang\"}" >&2
+echo "{\"event\":\"model_select\",\"model\":\"$MODEL\",\"served_model\":\"$SERVED_MODEL_NAME\",\"max_model_len\":$MAX_MODEL_LEN,\"image\":\"$IMAGE\",\"tp\":$TP,\"engine\":\"sglang\",\"compute_cap\":\"$CC_MAJOR.x\",\"kv_dtype\":\"$KV_DTYPE\",\"mem_fraction\":$MEM_FRACTION,\"max_running\":$MAX_RUNNING,\"chunked_prefill\":$CHUNKED_PREFILL,\"max_prefill\":$MAX_PREFILL}" >&2
 
 if [[ -n "$UV_DEPS" ]]; then
     echo "{\"event\":\"installing_deps\",\"deps\":\"$UV_DEPS\",\"tool\":\"uv\"}" >&2
@@ -172,6 +213,9 @@ fi
 if [[ "${SGLANG_SKIP_SERVER_WARMUP:-0}" == "1" ]]; then
     EXTRA_ARGS+=(--skip-server-warmup)
 fi
+if [[ "${SGLANG_DISABLE_CUDA_GRAPH:-0}" == "1" ]]; then
+    EXTRA_ARGS+=(--disable-cuda-graph)
+fi
 
 # Background apptainer + wait — same rationale as the vLLM script:
 # foreground exec inside the SSH-driven srun makes the server graceful-exit
@@ -192,6 +236,7 @@ apptainer exec \
     --env PYTHONPATH="$PYTHONPATH" \
     --env PYTHONNOUSERSITE="$PYTHONNOUSERSITE" \
     --env PATH="$PATH" \
+    --env CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-}" \
     --env SGLANG_DISABLE_CUDNN_CHECK=1 \
     "$IMAGE" \
     python3 -m sglang.launch_server \

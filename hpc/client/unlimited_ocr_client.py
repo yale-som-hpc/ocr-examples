@@ -231,6 +231,7 @@ async def launch_one_worker(args: argparse.Namespace, idx: int) -> Worker:
         "SGLANG_ENABLE_CUSTOM_LOGIT_PROCESSOR": "1" if args.ngram_size > 0 else "0",
         "SGLANG_DISABLE_OVERLAP_SCHEDULE": "1",
         "SGLANG_SKIP_SERVER_WARMUP": "1",
+        "SGLANG_DISABLE_CUDA_GRAPH": "1" if args.disable_cuda_graph else "0",
         "SGLANG_MEM_FRACTION_STATIC": str(args.mem_fraction_static),
         "SGLANG_MAX_RUNNING_REQUESTS": str(args.max_running_requests),
     }
@@ -251,6 +252,7 @@ async def launch_one_worker(args: argparse.Namespace, idx: int) -> Worker:
         image=args.image,
         pip_deps=args.uv_deps,
         extra_env=extra_env,
+        exclude=args.exclude,
     )
     tunnel_proc = await open_tunnel(args.host, args.user, args.key, endpoint)
     client = httpx.AsyncClient(
@@ -450,7 +452,11 @@ def main() -> None:
     p.add_argument("--key", default=DEFAULT_KEY)
     p.add_argument("--remote-dir", default=DEFAULT_REMOTE_DIR)
     p.add_argument("--partition", default="gpunormal")
-    p.add_argument("--gres", default="gpu:a100:1")
+    p.add_argument("--exclude", default="",
+                   help="Slurm node exclude list, e.g. c001 or c001,c002")
+    p.add_argument("--gres", default="gpu:a100:1",
+                   help="Slurm GPU request. Unlimited-OCR/SGLang currently needs A100 on SOM HPC; "
+                        "the current Baidu/SGLang wheel fails on RTX 8000 during the MoE request path.")
     p.add_argument("--cpus-per-task", type=int, default=8)
     p.add_argument("--mem", default="64G")
     p.add_argument("--time", default="02:00:00")
@@ -462,7 +468,9 @@ def main() -> None:
                    help="deps/wheels installed with uv inside the SGLang container before launch")
     p.add_argument("--slurm-script", default="hpc/slurm/sglang_serve.slurm")
     p.add_argument("--context-length", type=int, default=32768)
-    p.add_argument("--attention-backend", default="fa3")
+    p.add_argument("--attention-backend", default="flashinfer")
+    p.add_argument("--disable-cuda-graph", action=argparse.BooleanOptionalAction, default=True,
+                   help="disable SGLang CUDA graph capture; default true for broader GPU compatibility.")
     p.add_argument("--page-size", type=int, default=1)
     p.add_argument("--mem-fraction-static", type=float, default=0.8)
     p.add_argument("--max-running-requests", type=int, default=16)
@@ -474,7 +482,9 @@ def main() -> None:
     p.add_argument("--jpeg-quality", type=int, default=90)
     p.add_argument("--max-tokens", type=int, default=30000,
                    help="per-page max output tokens; must leave room for image tokens; pass 0 to omit")
-    p.add_argument("--ngram-size", type=int, default=35)
+    p.add_argument("--ngram-size", type=int, default=0,
+                   help="enable custom no-repeat n-gram processor when >0. "
+                        "Default 0 because some SGLang/Python builds crash in this path.")
     p.add_argument("--ngram-window", type=int, default=128)
     p.add_argument("--request-timeout", type=int, default=1200)
 

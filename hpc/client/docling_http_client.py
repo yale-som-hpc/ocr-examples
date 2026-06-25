@@ -74,11 +74,14 @@ async def launch_docling_serve(
     ssh_host: str, ssh_user: str, ssh_key: str, remote_dir: str,
     partition: str, gres: str, cpus_per_task: int, mem: str, time_str: str,
     job_name: str,
+    exclude: str | None = None,
 ) -> tuple[asyncio.subprocess.Process, ServerEndpoint]:
+    exclude_arg = f"--exclude={shlex.quote(exclude)} " if exclude else ""
     remote_cmd = (
         f"cd {shlex.quote(remote_dir)} && "
         f"srun "
         f"--partition={partition} "
+        f"{exclude_arg}"
         f"--gres={gres} "
         f"--cpus-per-task={cpus_per_task} "
         f"--mem={mem} "
@@ -296,6 +299,7 @@ async def launch_one_worker(args: argparse.Namespace, idx: int) -> Worker:
         partition=args.partition, gres=args.gres,
         cpus_per_task=args.cpus_per_task, mem=args.mem, time_str=args.time,
         job_name=f"docling-serve-w{idx}-{os.getpid()}",
+        exclude=args.exclude,
     )
     tunnel_proc = await open_tunnel(args.host, args.user, args.key, endpoint)
     await asyncio.sleep(1.0)
@@ -516,6 +520,8 @@ def main() -> None:
     p.add_argument("--key", default=DEFAULT_KEY)
     p.add_argument("--remote-dir", default=DEFAULT_REMOTE_DIR)
     p.add_argument("--partition", default="gpunormal")
+    p.add_argument("--exclude", default="",
+                   help="Slurm node exclude list, e.g. c001 or c001,c002")
     p.add_argument(
         "--gres", default="gpu:1",
         help="Slurm GRES. 'gpu:1' = any GPU. 'gpu:a100:1' to demand A100.",
