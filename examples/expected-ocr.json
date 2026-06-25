@@ -1,0 +1,193 @@
+{
+  "schema_version": 1,
+  "defaults": {
+    "min_chars": 40,
+    "required_ratio": 1.0
+  },
+  "samples": {
+    "tagged.pdf": {
+      "notes": "Text-native OCRmyPDF test resource used as the default positive pypdf smoke sample.",
+      "min_chars": 120,
+      "required_phrases": [
+        "Table of Contents",
+        "Document text",
+        "Table 1: Table caption",
+        "Column 1"
+      ]
+    },
+    "c02-22.pdf": {
+      "notes": "Huckleberry Finn Chapter II page image; phrases selected from visible page text.",
+      "min_chars": 120,
+      "required_ratio": 0.5,
+      "required_phrases": [
+        "Chapter II",
+        "We went tip-toeing",
+        "Miss Watson",
+        "Who dah"
+      ],
+      "engine_overrides": {
+        "pypdf": {
+          "skip": true,
+          "reason": "image-only scan; pypdf is text-layer extraction, not OCR"
+        }
+      }
+    },
+    "linn.pdf": {
+      "notes": "Expected text derived from vendored OCRmyPDF tests/resources/linn.txt.",
+      "source_text": "third_party/ocrmypdf/tests/resources/linn.txt",
+      "min_chars": 500,
+      "required_ratio": 0.75,
+      "required_phrases": [
+        "The LinnSequencer",
+        "32 Track MIDI Sequence Recorder",
+        "Recording a Sequence",
+        "Creating a Song"
+      ],
+      "engine_overrides": {
+        "pypdf": {
+          "skip": true,
+          "reason": "image-only scan; pypdf is text-layer extraction, not OCR"
+        }
+      }
+    },
+    "rotated_skew.pdf": {
+      "notes": "Derivative of OCRmyPDF Linn resource.",
+      "source_text": "third_party/ocrmypdf/tests/resources/linn.txt",
+      "min_chars": 250,
+      "required_ratio": 0.5,
+      "required_phrases": [
+        "The LinnSequencer",
+        "32 Track MIDI Sequence Recorder",
+        "Recording a Sequence",
+        "Creating a Song"
+      ],
+      "engine_overrides": {
+        "pypdf": {
+          "skip": true,
+          "reason": "image-only scan; pypdf is text-layer extraction, not OCR"
+        }
+      }
+    },
+    "skew.pdf": {
+      "notes": "Derivative of OCRmyPDF Linn resource.",
+      "source_text": "third_party/ocrmypdf/tests/resources/linn.txt",
+      "min_chars": 250,
+      "required_ratio": 0.5,
+      "required_phrases": [
+        "The LinnSequencer",
+        "32 Track MIDI Sequence Recorder",
+        "Recording a Sequence",
+        "Creating a Song"
+      ],
+      "engine_overrides": {
+        "pypdf": {
+          "skip": true,
+          "reason": "image-only scan; pypdf is text-layer extraction, not OCR"
+        }
+      }
+    },
+    "cardinal.pdf": {
+      "notes": "Derivative of OCRmyPDF Linn resource.",
+      "source_text": "third_party/ocrmypdf/tests/resources/linn.txt",
+      "min_chars": 500,
+      "required_ratio": 0.75,
+      "required_phrases": [
+        "The LinnSequencer",
+        "32 Track MIDI Sequence Recorder",
+        "Recording a Sequence",
+        "Creating a Song"
+      ],
+      "engine_overrides": {
+        "pypdf": {
+          "skip": true,
+          "reason": "image-only scan; pypdf is text-layer extraction, not OCR"
+        }
+      }
+    },
+    "graph.pdf": {
+      "notes": "Visible chart labels from OCRmyPDF graph resource.",
+      "min_chars": 60,
+      "required_ratio": 0.5,
+      "required_phrases": [
+        "Support",
+        "No vote",
+        "Oppose",
+        "Percentage"
+      ],
+      "engine_overrides": {
+        "pypdf": {
+          "skip": true,
+          "reason": "image-only chart; pypdf is text-layer extraction, not OCR"
+        }
+      }
+    },
+    "francais.pdf": {
+      "notes": "Visible French pangram with diacritics from OCRmyPDF synthetic resource.",
+      "min_chars": 80,
+      "required_ratio": 0.5,
+      "required_phrases": [
+        "Portez ce vieux whisky",
+        "juge blond",
+        "son ile interieure",
+        "caenogenese"
+      ],
+      "engine_overrides": {
+        "pypdf": {
+          "skip": true,
+          "reason": "image-only scan; pypdf is text-layer extraction, not OCR"
+        }
+      }
+    },
+    "multipage.pdf": {
+      "notes": "Assembly that starts with the same Huckleberry Finn Chapter II page.",
+      "min_chars": 120,
+      "required_ratio": 0.5,
+      "required_phrases": [
+        "Chapter II",
+        "We went tip-toeing",
+        "Miss Watson",
+        "Who dah"
+      ],
+      "engine_overrides": {
+        "pypdf": {
+          "skip": true,
+          "reason": "assembled image resources; pypdf text layer is not meaningful"
+        }
+      }
+    },
+    "epson.pdf": {
+      "notes": "OCRmyPDF Epson scanner resource, a printout of a Wikipedia OCR article.",
+      "min_chars": 80,
+      "required_ratio": 0.5,
+      "required_phrases": [
+        "Optical character recognition",
+        "OCR",
+        "mechanical or electronic",
+        "conversion"
+      ],
+      "engine_overrides": {
+        "pypdf": {
+          "skip": true,
+          "reason": "scanner PDF; pypdf is text-layer extraction, not OCR"
+        }
+      }
+    },
+    "2400dpi.pdf": {
+      "notes": "Visible typewriter soup recipe from OCRmyPDF resource.",
+      "min_chars": 80,
+      "required_ratio": 0.5,
+      "required_phrases": [
+        "Linzensoep",
+        "Waterman",
+        "1 ui",
+        "linzen wassen"
+      ],
+      "engine_overrides": {
+        "pypdf": {
+          "skip": true,
+          "reason": "image-only scan; pypdf is text-layer extraction, not OCR"
+        }
+      }
+    }
+  }
+}

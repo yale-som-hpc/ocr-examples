@@ -36,10 +36,11 @@ GPUs unless the user explicitly asks or the engine requires it.
 | --- | --- |
 | `README.md` | Human and AI-agent orientation, safe first commands, and data-layout rules |
 | `docs/ocr-engines.md` | Engine matrix, upstream links, and copy-paste smoke-test commands |
-| `examples/` | Public sample catalog, engine backend table, and lower-level `--pdf-list` example |
-| `scripts/` | High-level wrappers, sample preparation, smoke tests, and Slurm cleanup helpers |
+| `examples/` | Public sample catalog, expected OCR checks, engine backend table, and lower-level `--pdf-list` example |
+| `scripts/` | High-level wrappers, sample preparation, smoke tests, OCR output validation, and Slurm cleanup helpers |
 | `hpc/client/` | Low-level SSH tunnel clients for Docling, vLLM, and SGLang services |
 | `hpc/slurm/` | Containerized Slurm service scripts run on compute nodes |
+| `third_party/ocrmypdf/` | Vendored OCRmyPDF text fixtures used by correctness smoke tests |
 | `justfile` | Convenience recipes for setup, smoke tests, linting, sync, and cleanup |
 
 ## Install prerequisites
@@ -75,10 +76,10 @@ named `hpc`, set `HPC_HOST=hpc` for these examples.
 
 ## Public sample documents
 
-The sample set is ten public PDFs from the OCRmyPDF test resources. They cover
-simple typewriter text, two columns, rotated/skewed pages, slanted labels,
-French diacritics, multipage input, and scanner/PDF edge cases. The source
-catalog is `examples/sample-documents.tsv`.
+The sample set is public PDFs from the OCRmyPDF test resources. They cover
+text-native PDF extraction, simple typewriter text, two columns, rotated/skewed
+pages, slanted labels, French diacritics, multipage input, and scanner/PDF edge
+cases. The source catalog is `examples/sample-documents.tsv`.
 
 Download them when you are ready to test on HPC:
 
@@ -93,6 +94,12 @@ That writes:
 - `data/samples/manifest.txt`
 - `data/samples/documents.txt`
 - `data/documents/<fake-guid>/document.pdf`
+
+Smoke tests validate OCR output against `examples/expected-ocr.json`. Some
+checks use vendored upstream text fixtures in `third_party/ocrmypdf/`; others
+use conservative visible phrases from the public sample PDFs. These checks are
+intended to catch blank output, backend failure text, wrong documents, and
+obvious OCR failures. They are not a full OCR quality benchmark.
 
 ## OCR Engine Set
 

@@ -114,6 +114,8 @@ def smoke_command(case: MatrixCase, args: argparse.Namespace) -> list[str]:
         str(args.smoke_list),
         "--out-dir",
         str(args.out_dir / case.gpu),
+        "--gpu-label",
+        case.gpu,
         "--max-tokens",
         str(args.max_tokens),
         "--workers",
@@ -141,6 +143,8 @@ def smoke_command(case: MatrixCase, args: argparse.Namespace) -> list[str]:
         cmd.append("--force-prepare")
     if args.no_cleanup_on_failure:
         cmd.append("--no-cleanup-on-failure")
+    if args.no_validate:
+        cmd.append("--no-validate")
     exclude = gpu_exclude(args, case.gpu)
     if case.mode == "tunnel" and exclude:
         cmd += ["--hpc-exclude", exclude]
@@ -254,6 +258,11 @@ def parse_args() -> argparse.Namespace:
         "--report", type=Path, default=Path("results/smoke-matrix/report.tsv")
     )
     parser.add_argument("--max-tokens", type=int, default=1024)
+    parser.add_argument(
+        "--no-validate",
+        action="store_true",
+        help="skip expected-content validation in child smoke tests",
+    )
     parser.add_argument("--workers", type=int, default=1)
     parser.add_argument("--in-flight", type=int, default=1)
     parser.add_argument("--parallel", type=int, default=1)

@@ -1,4 +1,5 @@
 name	filename	url	notes
+text_native_tagged	tagged.pdf	https://raw.githubusercontent.com/ocrmypdf/OCRmyPDF/main/tests/resources/tagged.pdf	Text-native tagged PDF with table of contents, body text, and a small table; useful for pypdf positive validation.
 huck_finn_difficult	c02-22.pdf	https://raw.githubusercontent.com/ocrmypdf/OCRmyPDF/main/tests/resources/c02-22.pdf	Difficult public-domain page from Project Gutenberg with unusual fonts and illustration.
 two_column_linn	linn.pdf	https://raw.githubusercontent.com/ocrmypdf/OCRmyPDF/main/tests/resources/linn.pdf	Two-column page image derived from a Wikimedia source.
 rotated_skew	rotated_skew.pdf	https://raw.githubusercontent.com/ocrmypdf/OCRmyPDF/main/tests/resources/rotated_skew.pdf	Rotated and skewed derivative useful for orientation and deskew tests.

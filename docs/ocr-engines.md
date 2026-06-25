@@ -45,6 +45,12 @@ just prepare-documents
 That writes `data/samples/documents.txt`, which can be passed to every OCR engine
 script with `--from-file`.
 
+Smoke tests validate output content against `examples/expected-ocr.json` after
+each engine command succeeds. The default one-document smoke uses OCRmyPDF
+`tagged.pdf`, a text-native PDF, so `pypdf` has a positive correctness check.
+Broader runs can increase `--sample-count` to exercise the image-heavy OCR
+samples as well.
+
 ## Single-command smoke tests
 
 Before tunnel smoke tests, sync the code to the HPC login node:
@@ -85,7 +91,8 @@ That enumerates every `ENGINE-MODE-GPU` cell for `rtx` and `a100`, writes
 `results/smoke-matrix/report.tsv`, and skips cells that do not exist in this
 repo such as `pypdf-tunnel-*` and `unlimited_ocr-disk-*`. Disk rows are repeated
 under both GPU labels for matrix completeness, but disk mode does not request a
-Slurm GPU; the GPU class affects tunnel rows.
+Slurm GPU; the GPU class affects tunnel rows. A matrix cell passes only if the
+engine command exits successfully and expected-content validation passes.
 
 Run tunnel smoke tests in parallel only when the GPU partition has room:
 

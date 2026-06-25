@@ -119,6 +119,8 @@ def run_case(
         cmd = tunnel_command(case, args, ids)
     timeout = args.disk_timeout if case.mode == "disk" else args.tunnel_timeout
     rc = run(cmd, label=f"smoke:{label}", timeout=timeout)
+    if rc == 0 and not args.no_validate:
+        rc = validate_case(case, args, ids)
     return label, rc
 
 
@@ -210,6 +212,69 @@ def disk_command(
     ]
 
 
+def disk_output_path(
+    case: SmokeCase, args: argparse.Namespace, document_id: str
+) -> Path:
+    pdf = args.documents_root / document_id / "document.pdf"
+    return args.out_dir / "disk" / f"{pdf.stem}.{case.engine}.txt"
+
+
+def canonical_output_path(
+    case: SmokeCase, args: argparse.Namespace, document_id: str
+) -> Path:
+    return args.documents_root / document_id / "ocr" / f"{case.engine}.txt"
+
+
+def validate_one(
+    *,
+    case: SmokeCase,
+    args: argparse.Namespace,
+    document_id: str,
+    output: Path,
+) -> int:
+    sample_json = args.documents_root / document_id / "sample.json"
+    cmd = [
+        "uv",
+        "run",
+        "scripts/validate_ocr_output.py",
+        "--engine",
+        case.engine,
+        "--mode",
+        case.mode,
+        "--gpu",
+        args.gpu_label,
+        "--sample-json",
+        str(sample_json),
+        "--output",
+        str(output),
+        "--expectations",
+        str(args.expectations),
+    ]
+    return run(cmd, label=f"validate:{case.engine}:{case.mode}:{document_id}")
+
+
+def validate_case(case: SmokeCase, args: argparse.Namespace, ids: list[str]) -> int:
+    if case.mode == "disk":
+        return validate_one(
+            case=case,
+            args=args,
+            document_id=ids[0],
+            output=disk_output_path(case, args, ids[0]),
+        )
+
+    rc = 0
+    for document_id in ids:
+        one_rc = validate_one(
+            case=case,
+            args=args,
+            document_id=document_id,
+            output=canonical_output_path(case, args, document_id),
+        )
+        if one_rc != 0:
+            rc = one_rc
+    return rc
+
+
 def tunnel_hpc_gres(case: SmokeCase, args: argparse.Namespace) -> str:
     if case.engine == "unlimited_ocr" and args.hpc_gres == DEFAULT_HPC_GRES:
         return UNLIMITED_OCR_DEFAULT_HPC_GRES
@@ -248,6 +313,8 @@ def tunnel_command(
             str(args.hpc_cpus),
             "--hpc-time",
             args.hpc_time,
+            "--text-threshold",
+            str(args.docling_text_threshold),
             "--force",
         ]
         if args.hpc_exclude:
@@ -329,6 +396,19 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--out-dir", type=Path, default=Path("results/smoke"))
     parser.add_argument(
+        "--expectations", type=Path, default=Path("examples/expected-ocr.json")
+    )
+    parser.add_argument(
+        "--gpu-label",
+        default="-",
+        help="label used in validation output; matrix runner passes rtx or a100",
+    )
+    parser.add_argument(
+        "--no-validate",
+        action="store_true",
+        help="skip expected-content validation after successful OCR",
+    )
+    parser.add_argument(
         "--max-tokens",
         type=int,
         default=1024,
@@ -365,6 +445,12 @@ def parse_args() -> argparse.Namespace:
         "--hpc-cpus", type=int, default=8, help="Slurm CPU request per tunnel worker"
     )
     parser.add_argument("--hpc-time", default="02:00:00")
+    parser.add_argument(
+        "--docling-text-threshold",
+        type=int,
+        default=1_000_000,
+        help="force docling smoke paths to run even on text-native PDFs",
+    )
     parser.add_argument(
         "--disk-timeout",
         type=int,
