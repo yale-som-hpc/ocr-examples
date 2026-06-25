@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Sync this repo from trusted-local-client to the cluster's project dir.
+# Sync this repo from the trusted local client to the cluster's project dir.
 #
-# One-way: trusted-local-client is source of truth. Run this after editing any HPC code.
+# One-way: the trusted local client is source of truth. Run this after editing any HPC code.
 #
 # Usage:
 #   bin/sync.sh

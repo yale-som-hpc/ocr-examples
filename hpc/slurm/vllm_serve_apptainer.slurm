@@ -237,7 +237,7 @@ apptainer exec \
 # Background + wait pattern, per SURF/C3SE Slurm+Apptainer+vLLM recipe.
 # Foreground apptainer exec inside our SSH-driven srun was causing vllm to
 # exit cleanly (rc=0) right after "Application startup complete" — the EOF
-# on the trusted-local-client client's SSH stdin cascaded down and triggered vllm's
+# on the local client's SSH stdin cascaded down and triggered vllm's
 # graceful shutdown. Backgrounding with `&` decouples vllm from the parent
 # shell's job control, and `wait $!` keeps the slurm script alive until
 # vllm actually exits.

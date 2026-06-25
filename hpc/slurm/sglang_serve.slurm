@@ -15,7 +15,7 @@
 #
 # We share the VLLM_* env var names with the vLLM script so callers don't
 # have to fork their env-forwarding logic. SGLang-specific knobs default
-# from the SOM HPC LLM API recipe (SOM-HPC-LLM-API) and are
+# from the SOM HPC LLM API service pattern and are
 # overridable via SGLANG_* env vars.
 #
 # Required env vars:

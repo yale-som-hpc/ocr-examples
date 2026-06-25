@@ -9,7 +9,7 @@
 # Run docling-serve (official Apptainer CUDA image) on a GPU node, with the
 # same disk-hardening / discovery-marker contract as the vLLM service.
 #
-# The server listens on a random high port. The trusted-local-client client tunnels that
+# The server listens on a random high port. The trusted local client tunnels that
 # port back via SSH (-L localhost:LOCAL_PORT:COMPUTE_NODE:REMOTE_PORT login.node)
 # and POSTs PDF bytes to /v1/convert/file with X-Api-Key authentication.
 #
@@ -20,7 +20,7 @@
 # Disk hardening (no PII on disk, ever):
 #   - ulimit -c 0 / umask 077 / private tmpfs TMPDIR / EXIT trap
 #   - docling-serve never writes uploaded files; processes them in-memory.
-#   - Slurm log lands on trusted-local-client (we drive via `ssh ... srun ...`, not sbatch).
+#   - Slurm log lands on the trusted local client (we drive via `ssh ... srun ...`, not sbatch).
 set -u
 
 ulimit -c 0

@@ -7,7 +7,7 @@
 Unlimited-OCR is served on HPC through SGLang. This wrapper mirrors the
 DeepSeek/GLM wrappers: select document PDFs locally, call the HPC client with a
 TSV of input/output paths, then synthesize ocr/unlimited_ocr.{txt,json}
-sidecars on trusted-local-client.
+sidecars on the trusted local client.
 
 No local backend is provided because the upstream direct path requires NVIDIA
 CUDA. Use --use-hpc.

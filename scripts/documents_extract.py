@@ -185,7 +185,7 @@ def extract_one(document_id: str, documents_root: Path, args: argparse.Namespace
                 text,
                 provenance={
                     "method": "pdf-text-extraction",
-                    "host": "trusted-local-client",
+                    "host": "local",
                     "pdf_pages": pages,
                     "started_at": started,
                     "finished_at": utc_now_iso(),
@@ -232,7 +232,7 @@ def extract_one(document_id: str, documents_root: Path, args: argparse.Namespace
             text,
             provenance={
                 "method": "vlm-vision",
-                "host": "trusted-local-client",
+                "host": "local",
                 "pdf_pages": pages or None,
                 "started_at": started,
                 "finished_at": utc_now_iso(),
@@ -264,7 +264,7 @@ def extract_one(document_id: str, documents_root: Path, args: argparse.Namespace
                     paddle_clean,
                     provenance={
                         "method": "vlm-vision",
-                        "host": "trusted-local-client",
+                        "host": "local",
                         "pdf_pages": pages or None,
                         "started_at": started,
                         "finished_at": utc_now_iso(),

@@ -18,8 +18,9 @@ Architecture (per worker):
 
 Disk:
   - On cluster: nothing. vLLM holds requests in memory only. Slurm log on
-    trusted-local-client (we drive via ssh+srun, not sbatch).
-  - On trusted-local-client: PDFs read from disk, markdown written via atomic temp+rename.
+    the trusted local client (we drive via ssh+srun, not sbatch).
+  - On the trusted local client: PDFs read from disk, markdown written via
+    atomic temp+rename.
 """
 from __future__ import annotations
 import argparse

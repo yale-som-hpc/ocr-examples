@@ -13,7 +13,8 @@ baidu/Unlimited-OCR:
   - optional custom no-repeat n-gram logit processor
 
 Input PDF bytes never touch HPC disk. Pages are rendered and JPEG-encoded on
-trusted-local-client, then sent through the SSH tunnel to the in-memory SGLang server.
+the trusted local client, then sent through the SSH tunnel to the in-memory
+SGLang server.
 """
 from __future__ import annotations
 
@@ -63,7 +64,7 @@ class DeepseekOCRNoRepeatNGramLogitProcessor:
 
     This mirrors Baidu's Unlimited-OCR infer.py dependency on
     sglang.srt.sampling.custom_logit_processor.DeepseekOCRNoRepeatNGramLogitProcessor,
-    but keeps the trusted-local-client client from needing a full SGLang install.
+    but keeps the local client from needing a full SGLang install.
     """
 
     def __call__(self, logits: Any, custom_param_list: Optional[list[dict[str, Any]]] = None) -> Any:
