@@ -71,15 +71,18 @@ That writes:
 
 The current OCR engine set is:
 
-- `pypdf`: local PDF text extraction
-- `docling`: local/HPC fallback OCR, plus `docling-serve` over SSH tunnel
-- `olmocr2`: local MLX or HPC vLLM
-- `deepseek_ocr`: DeepSeek-OCR-2, local MLX or HPC vLLM
-- `glm_ocr`: GLM-OCR, local MLX or HPC vLLM
-- `unlimited_ocr`: Baidu Unlimited-OCR, HPC SGLang
+- [`pypdf`](https://github.com/py-pdf/pypdf): local PDF text extraction
+- [`docling`](https://github.com/docling-project/docling): local/HPC fallback OCR, plus [`docling-serve`](https://github.com/docling-project/docling-serve) over SSH tunnel
+- [`olmocr2`](https://github.com/allenai/olmocr): local MLX or HPC vLLM using [`allenai/olmOCR-2-7B-1025`](https://huggingface.co/allenai/olmOCR-2-7B-1025)
+- [`deepseek_ocr`](https://github.com/deepseek-ai/DeepSeek-OCR-2): DeepSeek-OCR-2, local MLX or HPC vLLM using [`deepseek-ai/DeepSeek-OCR-2`](https://huggingface.co/deepseek-ai/DeepSeek-OCR-2)
+- [`glm_ocr`](https://huggingface.co/zai-org/GLM-OCR): GLM-OCR, local MLX or HPC vLLM using [`zai-org/GLM-OCR`](https://huggingface.co/zai-org/GLM-OCR)
+- [`unlimited_ocr`](https://github.com/baidu/Unlimited-OCR): Baidu Unlimited-OCR, HPC SGLang using [`baidu/Unlimited-OCR`](https://huggingface.co/baidu/Unlimited-OCR)
 
-See `docs/ocr-engines.md` for disk-backed and no-persistent-HPC-disk smoke
-commands.
+Runtime links: [`vLLM`](https://github.com/vllm-project/vllm),
+[`SGLang`](https://github.com/sgl-project/sglang), and
+[`mlx-vlm`](https://github.com/Blaizzy/mlx-vlm). See
+`docs/ocr-engines.md` for disk-backed and no-persistent-HPC-disk smoke
+commands, plus more upstream documentation links.
 
 ## Running the examples
 
