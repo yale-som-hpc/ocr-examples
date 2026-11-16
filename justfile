@@ -15,6 +15,14 @@ check:
 samples:
     uv run scripts/download_sample_documents.py
 
+# download the public manuscript used by the specialist examples
+specialist-samples:
+    uv run scripts/download_sample_documents.py --catalog examples/specialist-samples.tsv --manifest data/samples/specialist-manifest.txt
+
+# render the public manuscript page image (requires Poppler)
+specialist-images:
+    uv run scripts/prepare_specialist_samples.py
+
 # copy public PDFs into data/documents/<fake-guid>/document.pdf for engine scripts
 prepare-documents:
     uv run scripts/prepare_sample_documents.py
@@ -39,31 +47,27 @@ documents-process *args:
 engine-extract engines="pypdf" *args:
     uv run --script scripts/documents_process.py --from-file data/samples/documents.txt --stages ocr --engines {{quote(engines)}} {{args}}
 
-# local/HPC olmOCR-2 extraction against public sample documents
+# HPC olmOCR-2 extraction against public sample documents
 engine-olmocr2 *args:
-    uv run --script scripts/olmocr2_extract.py --from-file data/samples/documents.txt {{args}}
+    uv run --script scripts/olmocr2_extract.py --from-file data/samples/documents.txt --use-hpc {{args}}
 
-# local/HPC DeepSeek-OCR-2 extraction against public sample documents
+# HPC DeepSeek-OCR-2 extraction against public sample documents
 engine-deepseek *args:
-    uv run --script scripts/deepseek_ocr_extract.py --from-file data/samples/documents.txt {{args}}
+    uv run --script scripts/deepseek_ocr_extract.py --from-file data/samples/documents.txt --use-hpc {{args}}
 
-# local/HPC GLM-OCR extraction against public sample documents
+# HPC GLM-OCR extraction against public sample documents
 engine-glm *args:
-    uv run --script scripts/glm_ocr_extract.py --from-file data/samples/documents.txt {{args}}
-
-# HPC Unlimited-OCR extraction against public sample documents
-engine-unlimited *args:
-    uv run --script scripts/unlimited_ocr_extract.py --from-file data/samples/documents.txt {{args}}
+    uv run --script scripts/glm_ocr_extract.py --from-file data/samples/documents.txt --use-hpc {{args}}
 
 # run one smoke test, e.g. `just smoke docling tunnel`
-smoke engine="all" mode="all" *args:
+smoke engine="all" mode="tunnel" *args:
     uv run scripts/smoke_tests.py --engine {{quote(engine)}} --mode {{quote(mode)}} {{args}}
 
-# run all supported disk and tunnel smoke tests; pass --parallel-tunnel N for GPU concurrency
+# run all supported HPC tunnel smoke tests; pass --parallel-tunnel N for GPU concurrency
 smoke-all *args:
-    uv run scripts/smoke_tests.py --engine all --mode all {{args}}
+    uv run scripts/smoke_tests.py --engine all --mode tunnel {{args}}
 
-# run explicit ENGINE x MODE x GPU smoke matrix
+# run the HPC tunnel ENGINE x GPU smoke matrix
 smoke-matrix *args:
     uv run scripts/smoke_matrix.py {{args}}
 
@@ -81,5 +85,5 @@ format:
 
 # Syntax-check scripts that do not need OCR engines or Python dependencies
 test:
-    uv run python -c 'import ast, pathlib; files=("scripts/download_sample_documents.py","scripts/prepare_sample_documents.py","scripts/ocr_engine_disk.py","scripts/ocr_provenance.py","scripts/hpc_jobs.py","scripts/smoke_tests.py","scripts/smoke_matrix.py","scripts/validate_ocr_output.py","scripts/documents_extract.py","scripts/olmocr2_extract.py","scripts/deepseek_ocr_extract.py","scripts/glm_ocr_extract.py","scripts/unlimited_ocr_extract.py","scripts/documents_process.py","hpc/client/vllm_http_client.py","hpc/client/docling_http_client.py","hpc/client/unlimited_ocr_client.py"); [ast.parse(pathlib.Path(f).read_text(), filename=f) for f in files]'
-    bash -n hpc/slurm/vllm_serve_apptainer.slurm hpc/slurm/docling_serve.slurm hpc/slurm/sglang_serve.slurm hpc/bin/bootstrap.sh hpc/bin/sync.sh
+    uv run python -c 'import ast, pathlib; files=("scripts/download_sample_documents.py","scripts/prepare_sample_documents.py","scripts/prepare_specialist_samples.py","scripts/ocr_engine_disk.py","scripts/ocr_provenance.py","scripts/hpc_jobs.py","scripts/smoke_tests.py","scripts/smoke_matrix.py","scripts/validate_ocr_output.py","scripts/documents_extract.py","scripts/olmocr2_extract.py","scripts/deepseek_ocr_extract.py","scripts/glm_ocr_extract.py","scripts/documents_process.py","hpc/client/vllm_http_client.py","hpc/client/docling_http_client.py"); [ast.parse(pathlib.Path(f).read_text(), filename=f) for f in files]'
+    bash -n hpc/slurm/vllm_serve_apptainer.slurm hpc/slurm/docling_serve.slurm hpc/bin/bootstrap.sh hpc/bin/sync.sh

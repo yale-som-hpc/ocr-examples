@@ -46,7 +46,6 @@ ENGINE_DOCLING = "docling"
 ENGINE_OLMOCR2 = "olmocr2"
 ENGINE_GLM_OCR = "glm_ocr"
 ENGINE_DEEPSEEK_OCR = "deepseek_ocr"
-ENGINE_UNLIMITED_OCR = "unlimited_ocr"
 
 # Human-readable engine labels. Looked up when synthesizing a sidecar
 # from minimal info (e.g. during migration of legacy files).
@@ -56,7 +55,6 @@ ENGINE_LABEL: dict[str, str] = {
     ENGINE_OLMOCR2: "olmOCR-2",
     ENGINE_GLM_OCR: "GLM-OCR",
     ENGINE_DEEPSEEK_OCR: "DeepSeek-OCR-2",
-    ENGINE_UNLIMITED_OCR: "Unlimited-OCR",
 }
 
 # Default method tag per engine. `method` is descriptive (how the engine
@@ -67,7 +65,6 @@ ENGINE_METHOD: dict[str, str] = {
     ENGINE_OLMOCR2: "vlm-vision",
     ENGINE_GLM_OCR: "vlm-vision",
     ENGINE_DEEPSEEK_OCR: "vlm-vision",
-    ENGINE_UNLIMITED_OCR: "vlm-vision",
 }
 
 

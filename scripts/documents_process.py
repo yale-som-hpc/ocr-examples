@@ -48,20 +48,17 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 # Slurm jobs that outlive their --time get killed by the scheduler, so
 # orphans from a crashed orchestrator can't linger more than the bound.
 #
-# `gres` defaults to `gpu:1` for engines that work on RTX 8000 so examples do
-# not wait specifically for A100 nodes. Unlimited-OCR keeps an A100 default
-# because the current Baidu/SGLang wheel fails on RTX 8000 during the MoE
-# request path.
+# Start with one RTX 8000 worker and one in-flight PDF per engine.
 ENGINES: dict[str, dict[str, Any]] = {
     "pypdf": {"script": "documents_extract.py", "has_hpc": False, "ocr_slug": "pypdf"},
     "docling": {
         "script": "documents_extract.py",
         "has_hpc": True,
         "ocr_slug": "docling",
-        "workers": 4,
-        "in_flight": 4,
+        "workers": 1,
+        "in_flight": 1,
         "sec_per_pdf": 30,
-        "gres": "gpu:1",
+        "gres": "gpu:rtx8000:1",
         # documents_extract.py uses --hpc-workers/--hpc-in-flight
         # prefix (different from olmocr2/deepseek/glm).
         "workers_flag": "--hpc-workers",
@@ -71,10 +68,10 @@ ENGINES: dict[str, dict[str, Any]] = {
         "script": "olmocr2_extract.py",
         "has_hpc": True,
         "ocr_slug": "olmocr2",
-        "workers": 4,
-        "in_flight": 24,
+        "workers": 1,
+        "in_flight": 1,
         "sec_per_pdf": 10,
-        "gres": "gpu:1",
+        "gres": "gpu:rtx8000:1",
         "hpc_flag": "--use-hpc",
         "workers_flag": "--workers",
         "in_flight_flag": "--in-flight",
@@ -83,10 +80,10 @@ ENGINES: dict[str, dict[str, Any]] = {
         "script": "deepseek_ocr_extract.py",
         "has_hpc": True,
         "ocr_slug": "deepseek_ocr",
-        "workers": 4,
-        "in_flight": 16,
+        "workers": 1,
+        "in_flight": 1,
         "sec_per_pdf": 20,
-        "gres": "gpu:1",
+        "gres": "gpu:rtx8000:1",
         "hpc_flag": "--use-hpc",
         "workers_flag": "--workers",
         "in_flight_flag": "--in-flight",
@@ -95,28 +92,16 @@ ENGINES: dict[str, dict[str, Any]] = {
         "script": "glm_ocr_extract.py",
         "has_hpc": True,
         "ocr_slug": "glm_ocr",
-        "workers": 4,
-        "in_flight": 16,
+        "workers": 1,
+        "in_flight": 1,
         "sec_per_pdf": 15,
-        "gres": "gpu:1",
-        "hpc_flag": "--use-hpc",
-        "workers_flag": "--workers",
-        "in_flight_flag": "--in-flight",
-    },
-    "unlimited_ocr": {
-        "script": "unlimited_ocr_extract.py",
-        "has_hpc": True,
-        "ocr_slug": "unlimited_ocr",
-        "workers": 2,
-        "in_flight": 8,
-        "sec_per_pdf": 30,
-        "gres": "gpu:a100:1",
+        "gres": "gpu:rtx8000:1",
         "hpc_flag": "--use-hpc",
         "workers_flag": "--workers",
         "in_flight_flag": "--in-flight",
     },
 }
-ENGINE_ORDER = ["pypdf", "docling", "olmocr2", "deepseek", "glm", "unlimited_ocr"]
+ENGINE_ORDER = ["pypdf", "docling", "olmocr2", "deepseek", "glm"]
 
 
 def compute_hpc_time(
@@ -376,7 +361,7 @@ def main() -> int:
         "--use-hpc",
         action="store_true",
         help="enable HPC backends for every selected engine that has one. "
-        "pypdf is local-only; docling/olmocr2/deepseek/glm/unlimited_ocr get HPC.",
+        "pypdf runs where the PDF resides; docling/olmocr2/deepseek/glm get HPC.",
     )
     p.add_argument(
         "--no-hpc-for",
@@ -449,6 +434,9 @@ def main() -> int:
     engines = expand_engines(args.engines)
     stages = expand_stages(args.stages)
     no_hpc = {s.strip() for s in args.no_hpc_for.split(",") if s.strip()}
+    gpu_engines = {"olmocr2", "deepseek", "glm"} & set(engines)
+    if gpu_engines and (not args.use_hpc or gpu_engines & no_hpc):
+        sys.exit("olmocr2, deepseek, and glm require --use-hpc in this repository")
     workers_override = parse_kv_pairs(args.hpc_workers)
     in_flight_override = parse_kv_pairs(args.hpc_in_flight)
 
@@ -476,7 +464,10 @@ def main() -> int:
     if hpc_engines:
         print(f"HPC:     {','.join(hpc_engines)}", flush=True)
     else:
-        print("HPC:     (none — all engines local)", flush=True)
+        print(
+            "HPC services: (none; run CPU disk engines inside a Slurm allocation)",
+            flush=True,
+        )
 
     if args.dry_run:
         print("\n(dry-run; exiting without work)", flush=True)
@@ -537,6 +528,8 @@ def main() -> int:
                     str(in_flight),
                     "--hpc-gres",
                     e["gres"],
+                    "--hpc-exclude",
+                    "c001",
                     "--hpc-time",
                     compute_hpc_time("docling", len(documents), workers),
                 ]
@@ -558,7 +551,7 @@ def main() -> int:
                 )
 
         # One subprocess per served OCR engine.
-        for eng in ("olmocr2", "deepseek", "glm", "unlimited_ocr"):
+        for eng in ("olmocr2", "deepseek", "glm"):
             if eng not in engines:
                 continue
             e = ENGINES[eng]
@@ -574,6 +567,8 @@ def main() -> int:
                     str(in_flight),
                     "--hpc-gres",
                     e["gres"],
+                    "--hpc-exclude",
+                    "c001",
                     "--hpc-time",
                     compute_hpc_time(eng, len(documents), workers),
                 ]

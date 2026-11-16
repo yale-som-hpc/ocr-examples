@@ -55,9 +55,16 @@ rsync \
     --exclude '.uv-cache/' \
     --exclude '.uv-tools/' \
     --exclude '.ruff_cache/' \
+    --exclude '.parle/' \
+    --exclude '.env' \
+    --exclude 'inputs/' \
+    --exclude 'scratch/' \
+    --exclude 'slurm-*.out' \
+    --exclude '*.log' \
     --exclude 'data/' \
     --exclude 'results/' \
     --exclude 'logs/' \
+    --exclude 'tmp/' \
     --exclude '__pycache__/' \
     --exclude '*.pyc' \
     --exclude '.cache/' \

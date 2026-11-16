@@ -136,7 +136,6 @@ async def launch_vllm_serve(
     slurm_script: str,
     image: str | None,
     pip_deps: str | None = None,
-    patch_mrope: bool = False,
     extra_env: dict[str, str] | None = None,
     exclude: str | None = None,
 ) -> tuple[asyncio.subprocess.Process, ServerEndpoint]:
@@ -162,8 +161,6 @@ async def launch_vllm_serve(
     env_parts.append(f"VLLM_IMAGE={shlex.quote(image)}")
     if pip_deps:
         env_parts.append(f"VLLM_PIP_DEPS={shlex.quote(pip_deps)}")
-    if patch_mrope:
-        env_parts.append("VLLM_PATCH_MROPE=1")
     if extra_env:
         for name, value in sorted(extra_env.items()):
             if not re.match(r"^[A-Z_][A-Z0-9_]*$", name):
@@ -183,8 +180,6 @@ async def launch_vllm_serve(
     export_vars.append("VLLM_IMAGE")
     if pip_deps:
         export_vars.append("VLLM_PIP_DEPS")
-    if patch_mrope:
-        export_vars.append("VLLM_PATCH_MROPE")
     if extra_env:
         export_vars.extend(sorted(extra_env))
     for var in ("VLLM_TP", "VLLM_ENFORCE_EAGER"):
@@ -528,7 +523,6 @@ async def launch_one_worker(args: argparse.Namespace, idx: int) -> Worker:
         slurm_script=args.slurm_script,
         image=args.image,
         pip_deps=args.pip_deps,
-        patch_mrope=args.patch_mrope,
         exclude=args.exclude,
     )
     tunnel_proc = await open_tunnel(args.host, args.user, args.key, endpoint)
@@ -941,16 +935,6 @@ def main() -> None:
         "modeling imports (e.g. 'addict matplotlib' for DeepSeek-OCR-2). "
         "Installed with uv inside the apptainer container at startup. "
         "Forwarded as VLLM_PIP_DEPS env var.",
-    )
-    p.add_argument(
-        "--patch-mrope",
-        action="store_true",
-        help="Bind-mount the patched mrope.py from vLLM PR #42765 into the "
-        "container. Required for GLM-OCR — the unpatched Triton MRoPE "
-        "kernel hardcodes NeoX-style rotation and produces degenerate "
-        "output for GLM models which use GPT-J-style rotation. The "
-        "patched file must exist at hpc/patches/vllm-pr42765/mrope.py "
-        "on the cluster side.",
     )
     pg = p.add_mutually_exclusive_group()
     pg.add_argument(

@@ -23,11 +23,9 @@ DEFAULT_KEY = os.path.expanduser(os.environ.get("HPC_KEY", ""))
 OCR_JOB_PATTERNS = (
     re.compile(r"^docling-serve-"),
     re.compile(r"^vllm-serve-"),
-    re.compile(r"^unlimited-ocr-"),
     re.compile(r"^docling_serve$"),
     re.compile(r"^vllm_serve$"),
     re.compile(r"^vllm_serve_app$"),
-    re.compile(r"^sglang_serve$"),
 )
 
 

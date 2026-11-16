@@ -290,7 +290,7 @@ def main() -> None:
         action="store_true",
         help="Offload docling to the SOM HPC cluster via hpc/client/docling_http_client.py. "
         "Documents needing docling are collected during the pypdf pass and submitted as "
-        "one batch at the end. Use this for any bulk run — local docling is minutes/PDF.",
+        "one batch at the end.",
     )
     parser.add_argument("--force", action="store_true")
 
@@ -305,23 +305,23 @@ def main() -> None:
     parser.add_argument(
         "--hpc-workers",
         type=int,
-        default=2,
+        default=1,
         help="(--use-hpc-for-docling) parallel Slurm jobs / GPUs",
     )
     parser.add_argument(
         "--hpc-in-flight",
         type=int,
-        default=4,
+        default=1,
         help="(--use-hpc-for-docling) concurrent PDFs per worker",
     )
     parser.add_argument(
         "--hpc-gres",
-        default="gpu:1",
-        help="(--use-hpc-for-docling) Slurm GRES; 'gpu:a100:1' to demand A100",
+        default="gpu:rtx8000:1",
+        help="(--use-hpc-for-docling) Slurm GRES; defaults to one RTX 8000",
     )
     parser.add_argument(
         "--hpc-exclude",
-        default="",
+        default="c001",
         help="(--use-hpc-for-docling) Slurm node exclude list, e.g. c001",
     )
     parser.add_argument(
@@ -337,7 +337,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--hpc-time",
-        default="04:00:00",
+        default="02:00:00",
         help="(--use-hpc-for-docling) Slurm time limit per worker",
     )
     args = parser.parse_args()

@@ -5,13 +5,13 @@
 """Run OCR engine smoke tests on one public sample document.
 
 Modes:
-  disk    reads a PDF from local disk and writes outputs locally
+  disk    reads a PDF from HPC disk and writes outputs there
   tunnel  reads a local PDF, starts the HPC service with Slurm, and sends
           request bytes over the SSH tunnel
 
 Unsupported combinations are skipped in the full matrix:
   pypdf tunnel         pypdf is local text extraction, no service backend
-  unlimited_ocr disk   Unlimited-OCR is CUDA/SGLang-only in these examples
+  GPU engines disk     GPU OCR uses HPC-hosted Slurm services in these examples
 """
 
 from __future__ import annotations
@@ -28,18 +28,16 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-ENGINES = ("pypdf", "docling", "olmocr2", "deepseek_ocr", "glm_ocr", "unlimited_ocr")
+ENGINES = ("pypdf", "docling", "olmocr2", "deepseek_ocr", "glm_ocr")
 MODES = ("disk", "tunnel")
 
-DISK_ENGINES = {"pypdf", "docling", "olmocr2", "deepseek_ocr", "glm_ocr"}
-TUNNEL_ENGINES = {"docling", "olmocr2", "deepseek_ocr", "glm_ocr", "unlimited_ocr"}
-DEFAULT_HPC_GRES = "gpu:1"
-UNLIMITED_OCR_DEFAULT_HPC_GRES = "gpu:a100:1"
+DISK_ENGINES = {"pypdf", "docling"}
+TUNNEL_ENGINES = {"docling", "olmocr2", "deepseek_ocr", "glm_ocr"}
+DEFAULT_HPC_GRES = "gpu:rtx8000:1"
 
 ENGINE_ALIASES = {
     "deepseek": "deepseek_ocr",
     "glm": "glm_ocr",
-    "unlimited": "unlimited_ocr",
 }
 
 ACTIVE_PROCS: set[subprocess.Popen] = set()
@@ -74,6 +72,12 @@ def run(cmd: list[str], *, label: str, timeout: int | None = None) -> int:
         ACTIVE_PROCS.add(proc)
     try:
         rc = proc.wait(timeout=timeout)
+    except KeyboardInterrupt:
+        try:
+            os.killpg(proc.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+        raise
     except subprocess.TimeoutExpired:
         elapsed = time.monotonic() - started
         print(
@@ -107,6 +111,11 @@ def terminate_active_processes() -> None:
                 os.killpg(proc.pid, signal.SIGTERM)
             except ProcessLookupError:
                 pass
+
+
+def handle_sigterm(signum: int, _frame: object) -> None:
+    terminate_active_processes()
+    raise SystemExit(128 + signum)
 
 
 def run_case(
@@ -185,7 +194,7 @@ def selected_cases(args: argparse.Namespace) -> list[SmokeCase]:
 
 def unsupported_reason(case: SmokeCase) -> str | None:
     if case.mode == "disk" and case.engine not in DISK_ENGINES:
-        return "no disk/local backend in this repo"
+        return "no HPC disk backend in this repo"
     if case.mode == "tunnel" and case.engine not in TUNNEL_ENGINES:
         return "no tunneled HPC service backend in this repo"
     return None
@@ -207,8 +216,6 @@ def disk_command(
         case.engine,
         "--outdir",
         str(outdir),
-        "--max-tokens",
-        str(args.max_tokens),
     ]
 
 
@@ -276,9 +283,9 @@ def validate_case(case: SmokeCase, args: argparse.Namespace, ids: list[str]) -> 
 
 
 def tunnel_hpc_gres(case: SmokeCase, args: argparse.Namespace) -> str:
-    if case.engine == "unlimited_ocr" and args.hpc_gres == DEFAULT_HPC_GRES:
-        return UNLIMITED_OCR_DEFAULT_HPC_GRES
-    return args.hpc_gres
+    if args.hpc_gres:
+        return args.hpc_gres
+    return DEFAULT_HPC_GRES
 
 
 def tunnel_command(
@@ -327,7 +334,6 @@ def tunnel_command(
         "olmocr2": "scripts/olmocr2_extract.py",
         "deepseek_ocr": "scripts/deepseek_ocr_extract.py",
         "glm_ocr": "scripts/glm_ocr_extract.py",
-        "unlimited_ocr": "scripts/unlimited_ocr_extract.py",
     }[case.engine]
     cmd = [
         "uv",
@@ -355,12 +361,6 @@ def tunnel_command(
     return cmd
 
 
-def cleanup_hpc_jobs() -> int:
-    return run(
-        ["uv", "run", "scripts/hpc_jobs.py", "cleanup"], label="cleanup:hpc-ocr-jobs"
-    )
-
-
 def hpc_status() -> int:
     return run(
         ["uv", "run", "scripts/hpc_jobs.py", "status", "--ocr-only"],
@@ -373,7 +373,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--engine",
         default="all",
-        help="engine slug or all. Aliases: deepseek, glm, unlimited",
+        help="engine slug or all. Aliases: deepseek, glm",
     )
     parser.add_argument("--mode", default="all", choices=("all", "disk", "tunnel"))
     parser.add_argument(
@@ -408,12 +408,6 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="skip expected-content validation after successful OCR",
     )
-    parser.add_argument(
-        "--max-tokens",
-        type=int,
-        default=1024,
-        help="disk-mode MLX max token cap for quick smoke tests",
-    )
     parser.add_argument("--workers", type=int, default=1)
     parser.add_argument("--in-flight", type=int, default=1)
     parser.add_argument(
@@ -425,14 +419,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--hpc-gres",
-        default=DEFAULT_HPC_GRES,
-        help="Slurm GPU request for tunnel smoke tests. Use gpu:rtx8000:1 "
-        "for RTX-capable engines. If omitted, Unlimited-OCR smoke tests "
-        "request gpu:a100:1 because the current SGLang backend needs it.",
+        default=None,
+        help="Slurm GPU request for tunnel smoke tests. Defaults to one RTX 8000.",
     )
     parser.add_argument(
         "--hpc-exclude",
-        default="",
+        default="c001",
         help="Slurm node exclude list for tunnel smoke tests, e.g. c001",
     )
     parser.add_argument(
@@ -468,11 +460,6 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="overwrite sample document.pdf copies during preparation",
     )
-    parser.add_argument(
-        "--no-cleanup-on-failure",
-        action="store_true",
-        help="do not call scripts/hpc_jobs.py cleanup after a failed tunnel smoke",
-    )
     args = parser.parse_args()
     args.engine = normalize_engine(args.engine)
     args.mode = normalize_mode(args.mode)
@@ -484,6 +471,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
+    signal.signal(signal.SIGTERM, handle_sigterm)
     args = parse_args()
     cases = selected_cases(args)
     exact_single = args.engine != "all" and args.mode != "all"
@@ -527,8 +515,6 @@ def main() -> int:
             label, rc = run_case(case, args, ids)
             if rc != 0:
                 failures.append(label)
-                if not args.no_cleanup_on_failure:
-                    cleanup_hpc_jobs()
     elif tunnel_cases:
         print(
             f"\n=== running {len(tunnel_cases)} tunnel smoke tests with "
@@ -547,13 +533,9 @@ def main() -> int:
         except KeyboardInterrupt:
             terminate_active_processes()
             pool.shutdown(wait=False, cancel_futures=True)
-            if not args.no_cleanup_on_failure:
-                cleanup_hpc_jobs()
             raise
         finally:
             pool.shutdown(wait=False, cancel_futures=True)
-        if failures and not args.no_cleanup_on_failure:
-            cleanup_hpc_jobs()
 
     if tunnel_cases:
         hpc_status()

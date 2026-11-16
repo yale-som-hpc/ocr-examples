@@ -75,11 +75,8 @@ MAX_MODEL_LEN="${VLLM_MAX_MODEL_LEN:-8192}"
 # srun line. Used for big models that don't fit in single A100 VRAM at fp16
 # (e.g. Qwen3.6-27B fp16 ~54GB + KV cache → comfortable at TP=2).
 TP="${VLLM_TP:-1}"
-# Enforce-eager skips CUDA-graph capture. Added during GLM-OCR debugging
-# to sidestep a graph-related crash that turned out to be a different bug
-# (mrope kernel; PR #42765). For OCR engines it's a safe no-op; for
-# non-OCR workloads the ~30-50% throughput cost matters, so callers can override.
-# Default ON for back-compat with the OCR wrappers.
+# Enforce-eager skips CUDA-graph capture for these OCR services.
+# Callers can disable it with VLLM_ENFORCE_EAGER=0.
 EAGER_FLAG="--enforce-eager"
 if [[ "${VLLM_ENFORCE_EAGER:-1}" == "0" ]]; then
     EAGER_FLAG=""
@@ -90,11 +87,6 @@ fi
 # private per-job PY_SITE so user account packages cannot leak into the
 # container.
 PIP_DEPS="${VLLM_PIP_DEPS:-}"
-# Optional: bind-mount our patched mrope.py over the container's. Needed
-# for GLM-OCR (vLLM issue #42016 / PR #42765 — Triton MRoPE kernel
-# hardcoded NeoX-style rotation; GLM uses GPT-J-style → garbage output
-# without the patch). Set VLLM_PATCH_MROPE=1 to enable.
-PATCH_MROPE="${VLLM_PATCH_MROPE:-}"
 
 HOST=$(hostname -s)
 PICK_PORT() {
@@ -180,32 +172,11 @@ uv pip install --target \"\$PY_SITE\" --quiet --no-cache-dir $PIP_DEPS" >&2
     fi
 fi
 
-# Build the optional mrope-patch bind argument. The container path is the
-# vllm dist-packages location confirmed from earlier tracebacks. Python 3.12
-# matches the vllm/vllm-openai images.
-EXTRA_BINDS=()
-if [[ -n "$PATCH_MROPE" ]]; then
-    PROJECT_DIR="${SLURM_SUBMIT_DIR:-$PWD}"
-    MROPE_SRC="$PROJECT_DIR/hpc/patches/vllm-pr42765/mrope.py"
-    if [[ ! -f "$MROPE_SRC" ]]; then
-        MROPE_SRC="$PROJECT_DIR/patches/vllm-pr42765/mrope.py"
-    fi
-    MROPE_DST="/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/rotary_embedding/mrope.py"
-    if [[ ! -f "$MROPE_SRC" ]]; then
-        echo "{\"event\":\"mrope_patch_missing\",\"src\":\"$MROPE_SRC\"}" >&2
-        cleanup
-        exit 2
-    fi
-    EXTRA_BINDS+=(--bind "$MROPE_SRC:$MROPE_DST:ro")
-    echo "{\"event\":\"mrope_patch_applied\",\"src\":\"$MROPE_SRC\",\"dst\":\"$MROPE_DST\"}" >&2
-fi
-
 apptainer exec \
     --cleanenv \
     --nv \
     --bind "$XDG_CACHE_HOME:$XDG_CACHE_HOME" \
     --bind "$REQUEST_TMP:$REQUEST_TMP" \
-    "${EXTRA_BINDS[@]}" \
     --env HF_HOME="$HF_HOME" \
     --env XDG_CACHE_HOME="$XDG_CACHE_HOME" \
     --env TMPDIR="$TMPDIR" \

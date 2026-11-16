@@ -3,9 +3,6 @@
 # requires-python = ">=3.11"
 # dependencies = [
 #     "pypdf>=4",
-#     "pillow",
-#     "pypdfium2",
-#     "mlx-vlm>=0.3.11; platform_system == 'Darwin' and platform_machine == 'arm64'",
 # ]
 # ///
 """Disk-backed smoke-test runner for the OCR engine set."""
@@ -14,28 +11,11 @@ from __future__ import annotations
 
 import argparse
 import json
-import platform
 import subprocess
 import time
 from pathlib import Path
 
 from pypdf import PdfReader
-
-
-PROMPTS = {
-    "olmocr2": (
-        "Below is one page of a document. Reproduce its content as plain "
-        "text + markdown, preserving every detail faithfully."
-    ),
-    "deepseek_ocr": "<|grounding|>Convert the document to markdown.",
-    "glm_ocr": "Text Recognition:",
-}
-
-MLX_MODELS = {
-    "olmocr2": "mlx-community/olmOCR-2-7B-1025-4bit",
-    "deepseek_ocr": "mlx-community/DeepSeek-OCR-2-bf16",
-    "glm_ocr": "mlx-community/GLM-OCR-8bit",
-}
 
 
 def out_path(input_pdf: Path, outdir: Path, engine: str, suffix: str = ".txt") -> Path:
@@ -119,66 +99,6 @@ def run_docling(input_pdf: Path, outdir: Path) -> Path:
     return output
 
 
-def render_pages(input_pdf: Path, scale: float):
-    import pypdfium2 as pdfium
-
-    doc = pdfium.PdfDocument(str(input_pdf))
-    try:
-        for index in range(len(doc)):
-            page = doc[index]
-            try:
-                yield index + 1, page.render(scale=scale).to_pil()
-            finally:
-                page.close()
-    finally:
-        doc.close()
-
-
-def run_mlx_vlm(
-    input_pdf: Path,
-    outdir: Path,
-    engine: str,
-    model_id: str,
-    scale: float,
-    max_tokens: int,
-) -> Path:
-    if platform.system() != "Darwin" or platform.machine() != "arm64":
-        raise SystemExit(
-            f"{engine} disk mode uses mlx-vlm and is only supported on Apple Silicon; "
-            "use tunnel mode for HPC GPU OCR."
-        )
-    started = time.time()
-    from mlx_vlm import generate, load
-    from mlx_vlm.prompt_utils import apply_chat_template
-    from mlx_vlm.utils import load_config
-
-    model, processor = load(model_id)
-    config = load_config(model_id)
-    page_texts = []
-    for page_num, image in render_pages(input_pdf, scale):
-        prompt = apply_chat_template(processor, config, PROMPTS[engine], num_images=1)
-        result = generate(
-            model,
-            processor,
-            prompt,
-            image=[image],
-            max_tokens=max_tokens,
-            verbose=False,
-        )
-        text = result.text if hasattr(result, "text") else str(result)
-        page_texts.append(f"<!-- page {page_num} -->\n{text.strip()}\n")
-    output = out_path(input_pdf, outdir, engine)
-    output.write_text("\n\n".join(page_texts), encoding="utf-8")
-    write_sidecar(
-        input_pdf,
-        output,
-        engine,
-        started,
-        {"model": model_id, "scale": scale, "max_tokens": max_tokens},
-    )
-    return output
-
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("input_pdf", type=Path)
@@ -187,19 +107,10 @@ def parse_args() -> argparse.Namespace:
         choices=(
             "pypdf",
             "docling",
-            "olmocr2",
-            "deepseek_ocr",
-            "glm_ocr",
-            "unlimited_ocr",
         ),
         required=True,
     )
     parser.add_argument("--outdir", type=Path, default=Path("results/engine-disk"))
-    parser.add_argument(
-        "--mlx-model", help="Override MLX model id for olmocr2/deepseek_ocr/glm_ocr"
-    )
-    parser.add_argument("--scale", type=float, default=2.0)
-    parser.add_argument("--max-tokens", type=int, default=4096)
     return parser.parse_args()
 
 
@@ -214,19 +125,6 @@ def main() -> None:
         output = run_pypdf(input_pdf, args.outdir)
     elif args.engine == "docling":
         output = run_docling(input_pdf, args.outdir)
-    elif args.engine in MLX_MODELS:
-        output = run_mlx_vlm(
-            input_pdf,
-            args.outdir,
-            args.engine,
-            args.mlx_model or MLX_MODELS[args.engine],
-            args.scale,
-            args.max_tokens,
-        )
-    else:
-        raise SystemExit(
-            "unlimited_ocr has no local/disk backend; use the SGLang HPC tunnel path"
-        )
     print(output)
 
 

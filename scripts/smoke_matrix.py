@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import argparse
-import concurrent.futures
 import csv
 import os
 import signal
@@ -18,12 +17,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-ENGINES = ("pypdf", "docling", "olmocr2", "deepseek_ocr", "glm_ocr", "unlimited_ocr")
+ENGINES = ("pypdf", "docling", "olmocr2", "deepseek_ocr", "glm_ocr")
 MODES = ("disk", "tunnel")
 GPU_PROFILES = ("rtx", "a100")
 
-DISK_ENGINES = {"pypdf", "docling", "olmocr2", "deepseek_ocr", "glm_ocr"}
-TUNNEL_ENGINES = {"docling", "olmocr2", "deepseek_ocr", "glm_ocr", "unlimited_ocr"}
+DISK_ENGINES = {"pypdf", "docling"}
+TUNNEL_ENGINES = {"docling", "olmocr2", "deepseek_ocr", "glm_ocr"}
 
 GPU_GRES = {
     "rtx": "gpu:rtx8000:1",
@@ -75,14 +74,9 @@ def split_csv(value: str, valid: tuple[str, ...], label: str) -> list[str]:
 
 def unsupported_reason(case: MatrixCase) -> str | None:
     if case.mode == "disk" and case.engine not in DISK_ENGINES:
-        return "no disk/local backend in this repo"
+        return "no HPC disk backend in this repo"
     if case.mode == "tunnel" and case.engine not in TUNNEL_ENGINES:
         return "no tunneled HPC service backend in this repo"
-    if case.engine == "unlimited_ocr" and case.mode == "tunnel" and case.gpu == "rtx":
-        return (
-            "known unsupported on SOM RTX 8000: current Baidu/SGLang wheel "
-            "fails in fused-MoE CUDA kernels; use A100"
-        )
     return None
 
 
@@ -121,8 +115,6 @@ def smoke_command(case: MatrixCase, args: argparse.Namespace) -> list[str]:
         str(args.out_dir / case.gpu),
         "--gpu-label",
         case.gpu,
-        "--max-tokens",
-        str(args.max_tokens),
         "--workers",
         str(args.workers),
         "--in-flight",
@@ -146,8 +138,6 @@ def smoke_command(case: MatrixCase, args: argparse.Namespace) -> list[str]:
         cmd += ["--from-file", str(args.from_file)]
     if args.force_prepare:
         cmd.append("--force-prepare")
-    if args.no_cleanup_on_failure:
-        cmd.append("--no-cleanup-on-failure")
     if args.no_validate:
         cmd.append("--no-validate")
     exclude = gpu_exclude(args, case.gpu)
@@ -244,12 +234,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--modes",
-        default="all",
+        default="tunnel",
         help="comma-separated mode list or all",
     )
     parser.add_argument(
         "--gpus",
-        default="all",
+        default="rtx",
         help="comma-separated GPU profile list or all. Valid profiles: rtx,a100",
     )
     parser.add_argument("--sample-count", type=int, default=1)
@@ -262,7 +252,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--report", type=Path, default=Path("results/smoke-matrix/report.tsv")
     )
-    parser.add_argument("--max-tokens", type=int, default=1024)
     parser.add_argument(
         "--no-validate",
         action="store_true",
@@ -270,7 +259,6 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--workers", type=int, default=1)
     parser.add_argument("--in-flight", type=int, default=1)
-    parser.add_argument("--parallel", type=int, default=1)
     parser.add_argument("--rtx-gres", default=GPU_GRES["rtx"])
     parser.add_argument("--a100-gres", default=GPU_GRES["a100"])
     parser.add_argument("--rtx-exclude", default=GPU_EXCLUDE["rtx"])
@@ -281,7 +269,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--disk-timeout", type=int, default=600)
     parser.add_argument("--tunnel-timeout", type=int, default=1800)
     parser.add_argument("--force-prepare", action="store_true")
-    parser.add_argument("--no-cleanup-on-failure", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
     args.engines = split_csv(args.engines, ENGINES, "engine")
@@ -289,8 +276,6 @@ def parse_args() -> argparse.Namespace:
     args.gpus = split_csv(args.gpus, GPU_PROFILES, "GPU profile")
     if args.sample_count < 1:
         raise SystemExit("--sample-count must be >= 1")
-    if args.parallel < 1:
-        raise SystemExit("--parallel must be >= 1")
     return args
 
 
@@ -306,18 +291,8 @@ def main() -> int:
 
     results: list[MatrixResult] = []
     try:
-        if args.parallel == 1:
-            for case in cases:
-                results.append(run_case(case, args))
-        else:
-            with concurrent.futures.ThreadPoolExecutor(
-                max_workers=args.parallel
-            ) as pool:
-                future_to_case = {
-                    pool.submit(run_case, case, args): case for case in cases
-                }
-                for future in concurrent.futures.as_completed(future_to_case):
-                    results.append(future.result())
+        for case in cases:
+            results.append(run_case(case, args))
     except KeyboardInterrupt:
         terminate_active_processes()
         raise
