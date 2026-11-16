@@ -15,12 +15,8 @@ check:
 samples:
     uv run scripts/download_sample_documents.py
 
-# download the public manuscript used by the specialist examples
+# download full-size upstream examples for the specialist engines
 specialist-samples:
-    uv run scripts/download_sample_documents.py --catalog examples/specialist-samples.tsv --manifest data/samples/specialist-manifest.txt
-
-# render the public manuscript page image (requires Poppler)
-specialist-images:
     uv run scripts/prepare_specialist_samples.py
 
 # copy public PDFs into data/documents/<fake-guid>/document.pdf for engine scripts

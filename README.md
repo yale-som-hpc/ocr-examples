@@ -86,26 +86,26 @@ The integrated sample set is public PDFs from the OCRmyPDF test resources. They 
 text-native PDF extraction, simple typewriter text, two columns, rotated/skewed
 pages, slanted labels, French diacritics, multipage input, and scanner/PDF edge
 cases. The source catalog is `examples/sample-documents.tsv`. The specialist
-examples use a separate Library of Congress handwritten letter catalog at
-`examples/specialist-samples.tsv` and render its first page to PNG with Poppler.
+examples download full-size source documents from the CHURRO, Kraken, and
+Infinity Parser 2 projects with `scripts/prepare_specialist_samples.py`.
 
-Download them when you are ready to test on HPC:
+Prepare both sets when you are ready to test on HPC:
 
 ```sh
 just samples
 just prepare-documents
 just specialist-samples
-just specialist-images
 ```
 
-That writes:
+The first two recipes prepare the integrated OCRmyPDF fixtures under
+`data/samples/pdfs/` and `data/documents/`. The last recipe downloads these
+specialist inputs directly to `data/samples/`:
 
-- `data/samples/pdfs/*.pdf`
-- `data/samples/images/lincoln-owens-1837.png` when `just specialist-images` runs
-- `data/samples/manifest.txt`
-- `data/samples/specialist-manifest.txt`
-- `data/samples/documents.txt`
-- `data/documents/<fake-guid>/document.pdf`
+- `data/samples/images/churro-gallery-english.jpg`
+- `data/samples/images/churro-gallery-english-rtx8000.jpg`
+- `data/samples/reference/churro-gallery-english.xml`
+- `data/samples/images/kraken-historical-print.jpg`
+- `data/samples/pdfs/infinity-financial-table.pdf`
 
 Smoke tests validate OCR output against `examples/expected-ocr.json`. Some
 checks use vendored upstream text fixtures in `third_party/ocrmypdf/`; others
@@ -476,20 +476,24 @@ the cluster.
 
 ### Samples and HPC setup
 
-The HPC setup below creates `data/samples/images/lincoln-owens-1837.png`, cropped to the
-manuscript on the first page of a
-[Library of Congress 1837 handwritten letter](https://www.loc.gov/static/classroom-materials/abraham-lincoln/documents/letter_owens.pdf),
-cataloged separately in `examples/specialist-samples.tsv`. The existing
-`c02-22.pdf` is historical print, `linn.pdf` covers two columns, and
-`graph.pdf` covers slanted chart labels. For
-math, forms, and tables, use `tagged.pdf` for a basic table, or substitute a
-public document from the [Chandra example gallery](https://github.com/datalab-to/chandra#examples).
-The Lincoln PDF includes a text layer only for Library of Congress framing,
-so the rendered image is the actual handwriting test.
+The specialist downloader uses three actual upstream examples:
+
+| Sample | Source | Why this page |
+| --- | --- | --- |
+| `churro-gallery-english.jpg` | [CHURRO's English handwriting gallery example](https://github.com/stanford-oval/Churro/blob/23c3ac65781443b18d87c8cdac5f77445c3319e6/static/readme_examples/gallery/english.jpg), full-size [dev dataset](https://huggingface.co/datasets/stanford-oval/churro-dataset/tree/cbeaba69179d5de122fbbc9e97b2a7d97942f688) row 777, `icdar2015/072_054_002` | Exact page featured in the project README, with a reference transcription |
+| `kraken-historical-print.jpg` | [Kraken test resource](https://github.com/mittagessen/kraken/blob/17c8cef65a80ac93848ab91aac798fd3c770edd3/tests/resources/input.jpg) | Full-page French historical print with old type and a footnote |
+| `infinity-financial-table.pdf` | [Infinity Parser 2 `demo_data/demo.pdf`](https://github.com/infly-ai/INF-MLLM/blob/011866e93026290ba39f05b796c92d58dd0ce40c/Infinity-Parser2/demo_data/demo.pdf) | Three-page financial statement; page 1 has a dense table |
+
+CHURRO's README gallery image is a small preview, so the downloader fetches
+the same page at full size from CHURRO's dev dataset. It also makes a
+1400 × 2100 pixel copy for the HPC RTX 8000: the original 2731 × 4096 image
+ran out of GPU memory. Chandra's gallery shows input/output composites rather
+than raw input files, so the Chandra command reuses Infinity Parser 2's demo
+PDF. The source IDs and revisions are in `scripts/prepare_specialist_samples.py`.
 
 To work on the cluster, set the host and remote directory, sync code, and
-prepare only public samples on the HPC login node. This assumes `uv` and
-Poppler's `pdftoppm` are available there. Run OCR itself inside a Slurm
+prepare only public samples on the HPC login node. This assumes `uv` is
+available there. Run OCR itself inside a Slurm
 allocation:
 
 ```sh
@@ -497,11 +501,7 @@ export HPC_HOST="${HPC_HOST:-hpc.som.yale.edu}"   # use hpc if that is your SSH 
 export HPC_REMOTE_DIR="${HPC_REMOTE_DIR:-ocr-examples}"
 just sync-hpc
 ssh "$HPC_HOST" "cd ~/$HPC_REMOTE_DIR && \
-  command -v pdftoppm && \
   uv run scripts/download_sample_documents.py && \
-  uv run scripts/download_sample_documents.py \
-    --catalog examples/specialist-samples.tsv \
-    --manifest data/samples/specialist-manifest.txt && \
   uv run scripts/prepare_specialist_samples.py"
 ssh -t "$HPC_HOST" "cd ~/$HPC_REMOTE_DIR && \
   srun --partition=gpunormal --gres=gpu:rtx8000:1 \
@@ -538,15 +538,43 @@ uv tool install --python 3.12 churro-ocr
 churro-ocr install hf
 uv pip install --python "$UV_TOOL_DIR/churro-ocr/bin/python" accelerate
 churro-ocr transcribe \
-  --image data/samples/images/lincoln-owens-1837.png \
+  --image data/samples/images/churro-gallery-english-rtx8000.jpg \
   --backend hf --model stanford-oval/churro-3B \
-  --output results/specialist/churro/lincoln-owens-1837.xml
+  --output results/specialist/churro/gallery-english.xml
 ```
 
-CHURRO writes `HistoricalDocument` XML. On the HPC test it recognized the
-`Springfield` date and `Friend Mary` salutation, with reading-order mistakes
-in the lower half. The CHURRO model weights use a Qwen research license; check
-the model terms before use beyond research.
+CHURRO writes `HistoricalDocument` XML. On the 1400 × 2100 HPC copy, it
+returned all 27 reference lines with six character edits after case-folding
+and whitespace normalization (0.4% character error rate). The model weights
+use a Qwen research license; check the model terms before use beyond research.
+
+To reproduce that one-page character count after the HPC run:
+
+```sh
+python3 - <<'PY'
+import re
+from xml.etree import ElementTree as ET
+
+def lines(path):
+    root = ET.parse(path).getroot()
+    text = " ".join(
+        node.text.strip() for node in root.iter()
+        if node.tag.rsplit("}", 1)[-1] == "Line" and node.text
+    )
+    return re.sub(r"\s+", " ", text.casefold())
+
+reference = lines("data/samples/reference/churro-gallery-english.xml")
+output = lines("results/specialist/churro/gallery-english.xml")
+previous = list(range(len(output) + 1))
+for i, left in enumerate(reference, 1):
+    current = [i]
+    for j, right in enumerate(output, 1):
+        current.append(min(current[-1] + 1, previous[j] + 1,
+                           previous[j - 1] + (left != right)))
+    previous = current
+print(f"{previous[-1]}/{len(reference)} character edits")
+PY
+```
 
 ### Kraken 7.1: historical line recognition
 
@@ -554,29 +582,45 @@ the model terms before use beyond research.
 PP-OCRv6 based multilingual recognition models trained on historical material.
 Its stock baseline segmenter locates lines; a downloaded recognition model
 transcribes them. The medium model gives the best reported accuracy of the
-three released sizes. This single-page command ran in an HPC `cpunormal`
-allocation (`--cpus-per-task=4 --mem=16G`):
+three released sizes. Download the model to scratch on the HPC login node:
 
 ```sh
-uv run --python 3.12 --with 'kraken>=7.1,<7.2' kraken get 10.5281/zenodo.21788410
-mkdir -p results/specialist/kraken
-uv run --python 3.12 --with 'kraken>=7.1,<7.2' kraken \
-  -i data/samples/images/lincoln-owens-1837.png \
-  results/specialist/kraken/lincoln-owens-1837.txt \
-  segment -bl ocr -m medium.safetensors
+mkdir -p /gpfs/scratch60/$USER/ocr-example-models
+curl -fL --retry 3 -o /gpfs/scratch60/$USER/ocr-example-models/medium.safetensors \
+  https://zenodo.org/api/records/21788410/files/medium.safetensors/content
+echo "e3411a453ce3b9e9efae3f8631d85762  /gpfs/scratch60/$USER/ocr-example-models/medium.safetensors" | md5sum -c -
 ```
 
-`kraken get` prints the installed model filename. Use that filename with `-m`
-if it differs. For layout and confidence review, run the same pipeline with
+Start an HPC `cpunormal` shell from your local terminal:
+
+```sh
+ssh -t "$HPC_HOST" "cd ~/$HPC_REMOTE_DIR && \
+  srun --partition=cpunormal --cpus-per-task=4 --mem=16G \
+    --time=00:45:00 --pty bash"
+```
+
+Inside that allocation:
+
+```sh
+mkdir -p results/specialist/kraken
+uv run --python 3.12 --with 'kraken>=7.1,<7.2' kraken \
+  -i data/samples/images/kraken-historical-print.jpg \
+  results/specialist/kraken/historical-print.txt \
+  segment -bl ocr -m /gpfs/scratch60/$USER/ocr-example-models/medium.safetensors
+```
+
+The model file comes from the
+[Kraken 7.1 medium release](https://zenodo.org/records/21788410).
+For layout and confidence review, run the same pipeline with
 `-x` before `-i` to produce PAGE XML. The model is a general base model;
-fine-tuning or a manuscript-specific model may be more accurate. The HPC run
-recognized `Friend Mary` but misread the date and several lines.
+fine-tuning or a page-specific model may be more accurate.
+On Kraken's own French page, the HPC run read the `HISTOIRE` heading, body
+paragraphs, and footnote, with a few letter and word errors.
 
 ### Chandra OCR 2: forms, math, tables, layout
 
 [Chandra OCR 2](https://github.com/datalab-to/chandra) is strongest on
-structured documents such as forms, tables, math and mixed layouts. Use the
-existing two-column and table samples first. In a GPU compute-node shell with
+structured documents such as forms, tables, math and mixed layouts. In a GPU compute-node shell with
 a supported PyTorch/CUDA environment:
 
 ```sh
@@ -584,9 +628,8 @@ uv venv /gpfs/scratch60/$USER/chandra-example-venv --python 3.12
 uv pip install --python /gpfs/scratch60/$USER/chandra-example-venv/bin/python 'chandra-ocr[hf]'
 mkdir -p results/specialist/chandra
 /gpfs/scratch60/$USER/chandra-example-venv/bin/chandra \
-  data/samples/pdfs/linn.pdf results/specialist/chandra --method hf --no-images
-/gpfs/scratch60/$USER/chandra-example-venv/bin/chandra \
-  data/samples/pdfs/tagged.pdf results/specialist/chandra --method hf --no-images
+  data/samples/pdfs/infinity-financial-table.pdf \
+  results/specialist/chandra --method hf --no-images
 ```
 
 The CLI writes Markdown, HTML, and metadata beneath a directory for each
@@ -594,14 +637,16 @@ input. Its default vLLM method needs a running server; `--method hf` uses a
 local model. The open weights carry a [modified OpenRAIL-M license](https://github.com/datalab-to/chandra#commercial-usage)
 with commercial limits.
 
-Validate both HPC outputs:
+Validate the HPC output:
 
 ```sh
 uv run scripts/validate_ocr_output.py --engine chandra_ocr_2 \
-  --filename linn.pdf --output results/specialist/chandra/linn/linn.md
-uv run scripts/validate_ocr_output.py --engine chandra_ocr_2 \
-  --filename tagged.pdf --output results/specialist/chandra/tagged/tagged.md
+  --filename infinity-financial-table.pdf \
+  --output results/specialist/chandra/infinity-financial-table/infinity-financial-table.md
 ```
+
+The three-page HPC run produced Markdown and HTML. Page 1 retained the
+financial table's headings, rows, and values, and the validator passed.
 
 ### Infinity Parser 2: complex document parsing
 
@@ -615,36 +660,38 @@ uv pip install --python /gpfs/scratch60/$USER/infinity-example-venv/bin/python \
   infinity_parser2 torch torchvision accelerate
 mkdir -p results/specialist/infinity-parser2
 /gpfs/scratch60/$USER/infinity-example-venv/bin/parser \
-  data/samples/pdfs/linn.pdf -o results/specialist/infinity-parser2 \
+  data/samples/pdfs/infinity-financial-table.pdf \
+  -o results/specialist/infinity-parser2 \
   --pages 1 --backend transformers \
   --model-name infly/Infinity-Parser2-Flash \
   --model-cache-dir /gpfs/scratch60/$USER/.cache/infinity_parser2 \
   --max-pixels 1000000 --batch-size 1
 ```
 
-The two-column page tests reading order. The CLI otherwise defaults to an
+The financial table tests cell content and structure. The CLI otherwise defaults to an
 offline vLLM engine with the larger Pro model, so specify both backend and
 model as above for a single RTX 8000. The pixel cap is needed because the
 default image size exhausted RTX 8000 memory in the HPC test. The successful
-run wrote `results/specialist/infinity-parser2/linn.pdf/result.md` and passed
-the repository's output validator.
+HPC run wrote
+`results/specialist/infinity-parser2/infinity-financial-table.pdf/result.md`
+with the page 1 table and passed the validator.
 
 ```sh
 uv run scripts/validate_ocr_output.py --engine infinity_parser_2 \
-  --filename linn.pdf \
-  --output results/specialist/infinity-parser2/linn.pdf/result.md
+  --filename infinity-financial-table.pdf \
+  --output results/specialist/infinity-parser2/infinity-financial-table.pdf/result.md
 ```
 
 ### HPC results on the public examples
 
 | Engine | Node | Sample | Result |
 | --- | --- | --- | --- |
-| CHURRO 3B | RTX 8000 | 1837 Lincoln letter | XML output; opening date and salutation recognized, lower-page reading order imperfect |
-| Kraken 7.1 medium | CPU | 1837 Lincoln letter | Text output; salutation recognized, date and several lines misread |
-| Chandra OCR 2 | RTX 8000 | Two-column `linn.pdf` and table `tagged.pdf` | Readable Markdown with column order and table cells intact; both validations passed |
-| Infinity Parser 2 Flash | RTX 8000 | Two-column `linn.pdf` | Readable Markdown with headings and column order intact; output validation passed |
+| CHURRO 3B | RTX 8000 | CHURRO English handwriting gallery page | 27/27 reference lines; 6/1350 normalized character edits (0.4% CER) |
+| Kraken 7.1 medium | CPU | Kraken historical French print | Readable body and footnote with a few recognition errors |
+| Chandra OCR 2 | RTX 8000 | Infinity financial table, 3 pages | Markdown table preserved headings and values; validation passed |
+| Infinity Parser 2 Flash | RTX 8000 | Infinity financial table, page 1 | Markdown table preserved headings and values; validation passed |
 
-These are single-document functional checks, not comparative accuracy scores.
+These are functional checks on a few pages, not a comparison between engines.
 The different examples exercise each engine's intended document type.
 
 ## Contributing

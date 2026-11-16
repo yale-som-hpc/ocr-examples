@@ -5,6 +5,17 @@
     "required_ratio": 1.0
   },
   "samples": {
+    "infinity-financial-table.pdf": {
+      "notes": "Page 1 of Infinity Parser 2's upstream demo_data/demo.pdf financial table.",
+      "min_chars": 300,
+      "required_ratio": 0.5,
+      "required_phrases": [
+        "CONDENSED CONSOLIDATED STATEMENTS OF OPERATIONS",
+        "Three Months Ended",
+        "Net sales",
+        "Research and development"
+      ]
+    },
     "tagged.pdf": {
       "notes": "Text-native OCRmyPDF test resource used as the default positive pypdf smoke sample.",
       "min_chars": 120,
